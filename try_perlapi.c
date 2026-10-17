@@ -14,6 +14,10 @@
 #include "lang_lock.h"
 #include "thrd_ctx.h"
 
+#ifndef CXp_EVALBLOCK
+#  define CXp_EVALBLOCK CXp_TRYBLOCK  /* older perls, e.g. 5.24 */
+#endif
+
 static LOGOP dummy_op;
 
 void

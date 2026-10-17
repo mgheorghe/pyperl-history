@@ -31,6 +31,10 @@ EOT
 
 print {$C} <<"EOT" if $ENABLE_JMPENV;
 
+#ifndef CXp_EVALBLOCK
+#  define CXp_EVALBLOCK CXp_TRYBLOCK  /* older perls, e.g. 5.24 */
+#endif
+
 static LOGOP dummy_op;
 
 void
