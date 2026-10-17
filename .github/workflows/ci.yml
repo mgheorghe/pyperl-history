@@ -126,7 +126,7 @@ jobs:
         run: |
           python -VV
           perl -V:version -V:useithreads -V:useshrplib -V:installvendorarch
-          cc --version | head -1
+          "$(perl -MConfig -e 'print $Config{cc}')" --version | head -1
 
       - name: Disable MULTI_PERL
         if: ${{ matrix.no_multi_perl }}
@@ -148,7 +148,7 @@ jobs:
         if: ${{ endsWith(matrix.python, 't') }}
         run: |
           export PYTHONPATH="$(ls -d "$PWD"/build/lib.*)"
-          PYTHON_GIL=0 python -c 'import perl' 2>&1 | grep "perl needs the GIL"
+          { PYTHON_GIL=0 python -c 'import perl' 2>&1 || true; } | grep "perl needs the GIL"
 
       - name: pip install and test the installed copy
         run: |
