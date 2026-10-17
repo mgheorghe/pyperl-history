@@ -15,6 +15,9 @@ perl = 'perl'
 import os
 import sys
 import subprocess
+if subprocess.run([perl, "-e", "exit($] < 5.024)"]).returncode != 0:
+    sys.exit("pyperl needs perl 5.24 or newer")
+
 MULTI_PERL = os.path.isfile("MULTI_PERL")
 if MULTI_PERL and subprocess.run([perl, "-MConfig", "-e", "print $Config{useithreads} ? 1 : 0"],
                                  stdout=subprocess.PIPE, universal_newlines=True).stdout.strip() != "1":
@@ -171,7 +174,7 @@ class build_perl(build):
         makefile_pl = [perl, 'Makefile.PL']
         # self-built perls have no vendor dirs
         vendorarch = subprocess.run([perl, '-MConfig', '-e', 'print $Config{installvendorarch}'],
-                                    capture_output=True, text=True).stdout.strip()
+                                    stdout=subprocess.PIPE, universal_newlines=True).stdout.strip()
         if vendorarch:
             makefile_pl.append('INSTALLDIRS=vendor')
         build.spawn(self, makefile_pl)
@@ -202,6 +205,7 @@ setup (name        = "pyperl",
         url         = "https://github.com/mgheorghe/pyperl",
         author      = "ActiveState",
         author_email= "gisle@ActiveState.com",
+        python_requires = ">=3.6",
         py_modules  = ['dbi', 'dbi2', 'perlpickle', 'perlmod'],
         ext_modules = ext_modules,
         cmdclass    = dict(build=build_perl, **({'install': boot_from_perl_install} if BOOT_FROM_PERL else {})),

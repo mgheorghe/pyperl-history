@@ -19,7 +19,7 @@ sub foo {
         $o->foo();
     };
     #print $@;
-    print "not " unless "$@" =~ /^python\.<class 'TypeError'>: Foo\.foo\(\) missing 1 required positional argument: 'a'/;
+    print "not " unless "$@" =~ /^python\.<class 'TypeError'>: (Foo\.)?foo\(\) missing 1 required positional argument: 'a'/;
     print "ok 1\n";
 
     my $res;

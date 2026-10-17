@@ -19,6 +19,7 @@ jobs:
   test:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     continue-on-error: ${{ matrix.optional == true }}
     timeout-minutes: 20
     strategy:
@@ -26,14 +27,18 @@ jobs:
       matrix:
         include:
           - name: oldest
-            os: ubuntu-24.04
-            python: "3.10"
+            os: ubuntu-22.04
+            python: "3.7"
             perl: "5.24"
             # perl 5.24 links -lnsl
             apt: libnsl-dev
           - name: distro
             os: ubuntu-24.04
-            system: true
+            system: apt
+          - name: rhel8
+            os: ubuntu-24.04
+            container: rockylinux:8
+            system: dnf
           - name: newest
             os: ubuntu-26.04
             python: "3.15"
@@ -81,10 +86,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends ${{ matrix.apt }}
 
       - name: Install distro Python and Perl development packages
-        if: ${{ matrix.system }}
+        if: ${{ matrix.system == 'apt' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends python3-dev python3-venv libperl-dev
+
+      - name: Install RHEL Python and Perl development packages
+        if: ${{ matrix.system == 'dnf' }}
+        run: dnf install -y python36 python36-devel perl perl-devel perl-ExtUtils-Embed gcc make redhat-rpm-config
 
       - name: Create virtualenv
         run: |
