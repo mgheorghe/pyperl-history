@@ -2179,7 +2179,7 @@ static PySequenceMethods pysvrv_as_sequence = {
 PyTypeObject SVRVtype = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     .tp_name = "perl ref",
-    .tp_basicsize = sizeof(PyTypeObject),
+    .tp_basicsize = sizeof(PySVRV),
     .tp_dealloc = (destructor)pysvrv_dealloc,
     .tp_repr = (reprfunc)pysvrv_repr,
     .tp_as_number = &pysvrv_as_number,
