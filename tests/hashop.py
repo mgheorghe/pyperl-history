@@ -79,6 +79,12 @@ class TestPyPerlHashOp(unittest.TestCase):
         del self.h["bar"]
         self.assertEqual(list(self.h.keys()), ["foo"])
 
+    def test_tied_hash(self):
+        h = perl.eval('require Tie::Hash; tie my %h, "Tie::StdHash"; %h = (a => 1, b => 2); \\%h')
+        self.assertEqual(sorted(h.keys()), ["a", "b"])
+        self.assertEqual(sorted(h.values()), [1, 2])
+        self.assertEqual(sorted(h.items()), [("a", 1), ("b", 2)])
+
     def test_non_utf8_keys(self):
         h = perl.eval('{ "\\xe9" => 1, "abc" => 2 }')
         self.assertEqual(set(h.keys()), {b"\xe9", "abc"})
