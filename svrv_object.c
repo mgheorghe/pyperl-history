@@ -220,7 +220,6 @@ FAIL:
 static int array_index(AV* av, PyObject *v);
 static void type_error(char *msg, SV* sv);
 
-/* sq_contains: "key in perl_hash" or "value in perl_array" */
 static int
 pysvrv_contains(PySVRV *self, PyObject *value)
 {
@@ -922,7 +921,7 @@ array_index(AV* av, PyObject *v)
 	    PERL_UNLOCK;
 	    cmp = PyObject_RichCompareBool(x, v, Py_EQ);
 	    Py_DECREF(x);
-	    if (cmp > 0) {  /* equal */
+	    if (cmp > 0) {
 		ENTER_PERL;
 		return i;
 	    }
@@ -1581,9 +1580,7 @@ static PyObject *pysvrv_slice(PySVRV *self, Py_ssize_t ilow, Py_ssize_t ihigh);
 static int pysvrv_ass_slice(PySVRV *self, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v);
 
 #if PY_MAJOR_VERSION >= 3
-/* Python 3 has no sq_slice/sq_ass_slice; a[i:j] arrives at mp_subscript
- * with a slice object.  Only step 1 slices map onto perl splice semantics.
- */
+/* Python 3 passes slices to mp_subscript */
 static int
 slice_bounds(PySVRV *self, PyObject *slice, Py_ssize_t *ilow, Py_ssize_t *ihigh)
 {

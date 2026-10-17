@@ -162,8 +162,7 @@ class build_perl(build):
     def run(self):
         os.chdir('Python-Object')
         makefile_pl = [perl, 'Makefile.PL']
-        # distro perls install modules into vendor dirs; a self-built perl
-        # (perlbrew, Strawberry, ...) has none and would install into '/'
+        # self-built perls have no vendor dirs
         vendorarch = subprocess.run([perl, '-MConfig', '-e', 'print $Config{installvendorarch}'],
                                     capture_output=True, text=True).stdout.strip()
         if vendorarch:

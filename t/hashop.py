@@ -40,7 +40,7 @@ print("ok 7")
 
 h["bar"] = 21
 
-# perl randomizes hash order (per hash and per process), so compare sorted
+# perl hash order is random
 if sorted(h.keys()) != ["bar", "foo"] or \
    sorted(h.values()) != [21, 42] or \
    sorted(h.items()) !=  [("bar", 21), ("foo", 42)]:

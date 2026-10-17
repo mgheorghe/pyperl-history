@@ -723,7 +723,7 @@ PyEval_CallObjectWithKeywords(o,...)
                         if (svp) {
                             item = sv2pyo(*svp);
                         }
-                        else {  /* hole in the array; a tuple slot must not stay NULL */
+                        else {  /* hole in the array */
                             Py_INCREF(Py_None);
                             item = Py_None;
                         }
@@ -800,7 +800,7 @@ PyEval_CallObjectWithKeywords(o,...)
 
         ENTER_PYTHON;
         if (alist == NULL) {
-            /* unlike PyEval_CallObjectWithKeywords(), PyObject_Call() needs a tuple */
+            /* PyObject_Call() needs an args tuple */
             t1 = PyTuple_New(0);
             if (t1 == NULL)
                 goto done;
@@ -1073,7 +1073,7 @@ Exception(...)
 #endif
     case 26: e = PyExc_ValueError; break;
     case 27: e = PyExc_ZeroDivisionError; break;
-    /* python 3 has no StandardError; still documented in Python::Err */
+    /* StandardError is gone in Python 3 */
     case 28: e = PyExc_Exception; break;
     default: croak("Bad exception selector (%d)", (int)ix); break;
     }
@@ -1086,7 +1086,7 @@ Exception(...)
              else {
         arg = PerlPyObject_pyo_or_null(argsv);
              }
-        /* ISA test, so that e.g. ImportError matches ModuleNotFoundError */
+        /* match subclasses too */
         PYTHON_LOCK;
         RETVAL = boolSV(arg && PyErr_GivenExceptionMatches(arg, e));
         PYTHON_UNLOCK;

@@ -36,14 +36,13 @@ pyo2sv(PyObject *o)
 	Py_ssize_t len;
 	const char *s = PyUnicode_AsUTF8AndSize(o, &len);
 	if (s == NULL) {
-	    /* not encodable as UTF-8 (lone surrogates), don't convert */
+	    /* lone surrogates */
 	    PyErr_Clear();
 	    return newPerlPyObject_inc(o);
 	}
 	return newSVpvn(s, len);
     }
     else if (PyBytes_Check(o)) {
-	/* binary data, e.g. what sv2pyo() made of a non UTF-8 perl string */
 	return newSVpvn(PyBytes_AS_STRING(o), PyBytes_GET_SIZE(o));
     }
     else if (PyLong_Check(o)) {
@@ -56,7 +55,7 @@ pyo2sv(PyObject *o)
 	    if (!(tmp == (unsigned long long)-1 && PyErr_Occurred()))
 		return newSVuv((UV)tmp);
 	}
-	/* too big for perl's integers, don't convert after all */
+	/* too big for IV/UV */
 	PyErr_Clear();
 	return newPerlPyObject_inc(o);
     }
@@ -77,10 +76,7 @@ pyo2sv(PyObject *o)
 }
 
 
-/* Perl strings that are valid UTF-8 become str.  Byte strings that are not
- * (pack() output, Opcode masks, binary file data, ...) become bytes instead
- * of failing with UnicodeDecodeError; pyo2sv() maps bytes back unchanged.
- */
+/* valid UTF-8 becomes str, anything else bytes */
 static PyObject*
 pv2pyo(SV* sv, const char *s, STRLEN len)
 {
@@ -111,7 +107,7 @@ sv2pyo(SV* sv)
 	po = Py_BuildValue("d", SvNV(sv));
     }
     else if (SvIOK(sv)) {
-	/* IV/UV are 64 bit even where a C long is not (Win64) */
+	/* long is 32 bit on Win64 */
 	if (SvIsUV(sv))
 	    po = PyLong_FromUnsignedLongLong((unsigned long long)SvUV(sv));
 	else

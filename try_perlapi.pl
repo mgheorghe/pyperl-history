@@ -32,7 +32,7 @@ EOT
 print {$C} <<"EOT" if $ENABLE_JMPENV;
 
 #ifndef CXp_EVALBLOCK
-#  define CXp_EVALBLOCK CXp_TRYBLOCK  /* older perls, e.g. 5.24 */
+#  define CXp_EVALBLOCK CXp_TRYBLOCK  /* older perls */
 #endif
 
 static LOGOP dummy_op;
@@ -45,11 +45,7 @@ fake_inittry(void)
     dummy_op.op_next = Nullop;
 }
 
-/* Push an eval{} context so that a die() inside the try_* call unwinds
- * to our JMPENV.  This mirrors Perl_create_eval_scope() and
- * Perl_delete_eval_scope() in pp_ctl.c, which are not exported to
- * extensions; the cx_* functions they use are (perl 5.24 or later).
- */
+/* like perl's create_eval_scope(), which is not exported */
 static void
 fake_entertry(void)
 {
@@ -74,7 +70,7 @@ static void
 fake_leavetry(I32 oldcxix)
 {
     dCTXP;
-    /* When perl died, die_unwind() has already popped our eval context */
+    /* already popped if perl died */
     if (cxstack_ix > oldcxix) {
         PERL_CONTEXT *cx = CX_CUR();
         assert(cxstack_ix == oldcxix + 1);
