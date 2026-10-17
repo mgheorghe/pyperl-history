@@ -37,6 +37,8 @@ jobs:
             os: ubuntu-24.04
             python: "3.10"
             perl: "5.24"
+            # perl 5.24's ldopts link -lnsl, no longer installed by default
+            apt: libnsl-dev
           - name: distro (Ubuntu 24.04 packages, Python 3.12, Perl 5.38)
             os: ubuntu-24.04
             system: true
@@ -78,6 +80,12 @@ jobs:
         with:
           perl-version: ${{ matrix.perl }}
           multi-thread: ${{ matrix.threads == true }}
+
+      - name: Install extra packages
+        if: ${{ matrix.apt }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${{ matrix.apt }}
 
       - name: Install distro Python and Perl development packages
         if: ${{ matrix.system }}
