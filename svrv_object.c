@@ -2125,9 +2125,8 @@ static PySequenceMethods pysvrv_as_sequence = {
 };
 
 
-//XXX must compile as a C++ file on Windows
 PyTypeObject SVRVtype = {
-    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    PyVarObject_HEAD_INIT(NULL, 0)  /* set by PyType_Ready() */
     .tp_name = "perl ref",
     .tp_basicsize = sizeof(PySVRV),
     .tp_dealloc = (destructor)pysvrv_dealloc,

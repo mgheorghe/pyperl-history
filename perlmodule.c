@@ -38,7 +38,6 @@ bundled_inc(void)
     static int done = 0;
     char path[4000];
     char *sep;
-    struct stat st;
 
     if (done)
         return inc[0] ? inc : NULL;
@@ -68,7 +67,12 @@ bundled_inc(void)
     if (!sep)
         return NULL;
     strcpy(sep + 1, "pyperl-perl");
+#ifdef WIN32
+    if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES)
+#else
+    struct stat st;
     if (stat(path, &st) == 0)
+#endif
         sprintf(inc, "-I%s", path);
     return inc[0] ? inc : NULL;
 }
@@ -116,12 +120,13 @@ new_perl(void)
 void
 free_perl(PerlInterpreter *p)
 {
-#if 0
-    fprintf(stderr, "destructing perl %p\n", p); fflush(stderr);
-#endif
+    PerlInterpreter *old = (PerlInterpreter *)PERL_GET_CONTEXT;
+
+    PERL_SET_CONTEXT(p);  /* destruct with the right interpreter (Win32 memory pools) */
     perl_destruct(p);
     perl_free(p);
-    PERL_SET_CONTEXT(0);
+    if (old && old != p)  /* never set NULL: perl 5.42 dereferences it on Win32 */
+        PERL_SET_CONTEXT(old);
 }
 
 #else /* MULTI_PERL */
@@ -846,6 +851,9 @@ PyInit_perl(void)
 
 {
     PyObject *m, *d;
+    static char *sys_args[] = { "", NULL };
+    static char **sys_argv = sys_args, **sys_env = sys_args + 1;
+    static int sys_argc = 1;
 #ifdef Py_GIL_DISABLED
     if (gil_forced_off()) {
         PyErr_SetString(PyExc_ImportError, "perl needs the GIL, which was disabled with PYTHON_GIL=0 or -X gil=0");
@@ -859,6 +867,7 @@ PyInit_perl(void)
     PerlInterpreter *main_perl;
 #endif
 
+    PERL_SYS_INIT3(&sys_argc, &sys_argv, &sys_env);
     main_perl = perl_alloc();
     perl_construct(main_perl);
     perl_parse(main_perl, xs_init, argc, embedding, NULL);
@@ -866,6 +875,7 @@ PyInit_perl(void)
 
     fake_inittry();
 #else
+    PERL_SYS_INIT3(&sys_argc, &sys_argv, &sys_env);
     thrd_ctx_init();
 #endif /* MULTI_PERL */
 
@@ -878,6 +888,8 @@ PyInit_perl(void)
      * python itself was embedded before we imported perl.
      */
 
+    if (PyType_Ready(&SVRVtype) < 0)
+        return NULL;
     m = PyModule_Create(&ModuleDef);
     if (m == NULL)
         return NULL;

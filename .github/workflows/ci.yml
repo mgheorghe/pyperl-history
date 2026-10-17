@@ -22,6 +22,9 @@ jobs:
     container: ${{ matrix.container }}
     continue-on-error: ${{ matrix.optional == true }}
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -63,6 +66,12 @@ jobs:
             perl: "5.44"
             threads: true
             optional: true
+          - name: windows (optional)
+            os: windows-latest
+            python: "3.14"
+            perl: "5.42"
+            perl_distribution: strawberry
+            optional: true
           - name: macOS (optional)
             os: macos-latest
             python: "3.15"
@@ -84,6 +93,17 @@ jobs:
         with:
           perl-version: ${{ matrix.perl }}
           multi-thread: ${{ matrix.threads == true }}
+          distribution: ${{ matrix.perl_distribution || 'default' }}
+
+      - name: Put Strawberry Perl ahead of Git's perl in bash
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          function unix($p) { $p = (Resolve-Path $p).Path -replace '\\', '/'; '/' + $p.Substring(0, 1).ToLower() + $p.Substring(2) }
+          $bin = Split-Path (Get-Command perl).Source
+          $env_sh = "$env:RUNNER_TEMP\strawberry.sh"
+          "export PATH=`"$(unix $bin):$(unix "$bin\..\..\c\bin"):`$PATH`"" | Out-File -Encoding ascii $env_sh
+          "BASH_ENV=$(unix $env_sh)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       - name: Install extra packages
         if: ${{ matrix.apt }}
@@ -103,15 +123,16 @@ jobs:
 
       - name: Create virtualenv
         run: |
-          python3 -m venv .venv
-          .venv/bin/python -m pip install --upgrade pip setuptools
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          "$(command -v python || command -v python3)" -m venv .venv
+          bin=.venv/bin; [ -d .venv/Scripts ] && bin=.venv/Scripts
+          "$bin/python" -m pip install --upgrade pip setuptools
+          (cd "$bin" && { pwd -W 2>/dev/null || pwd; }) >> "$GITHUB_PATH"
 
       - name: Versions
         run: |
           python -VV
           perl -V:version -V:useithreads -V:useshrplib -V:installvendorarch
-          cc --version | head -1
+          "$(perl -MConfig -e 'print $Config{cc}')" --version | head -1
 
       - name: Disable MULTI_PERL
         if: ${{ matrix.no_multi_perl }}
@@ -121,6 +142,8 @@ jobs:
         run: python setup.py build
 
       - name: Test
+        # Windows finds perl5xx.dll through the installed pyperl-dll.pth only
+        if: ${{ runner.os != 'Windows' }}
         run: |
           export PYTHONPATH="$(ls -d "$PWD"/build/lib.*)"
           python -c "import perl; print('MULTI_PERL =', perl.MULTI_PERL)"
@@ -131,7 +154,7 @@ jobs:
         if: ${{ endsWith(matrix.python, 't') }}
         run: |
           export PYTHONPATH="$(ls -d "$PWD"/build/lib.*)"
-          PYTHON_GIL=0 python -c 'import perl' 2>&1 | grep "perl needs the GIL"
+          { PYTHON_GIL=0 python -c 'import perl' 2>&1 || true; } | grep "perl needs the GIL"
 
       - name: pip install and test the installed copy
         run: |
