@@ -10,6 +10,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include "pycompat.h"
 #include "thrd_ctx.h"
 #include "perlmodule.h"
 
@@ -25,8 +26,8 @@ get_thread_ctx(void)
     ctx = (thread_ctx*)pthread_getspecific(thrd_ctx_key);
 #endif
     if (!ctx) {
-	refcounted_perl* p = (refcounted_perl*)PyMem_Malloc(sizeof(refcounted_perl));
-	ctx = (thread_ctx*)PyMem_Malloc(sizeof(thread_ctx));
+	refcounted_perl* p = (refcounted_perl*)PyMem_RawMalloc(sizeof(refcounted_perl));
+	ctx = (thread_ctx*)PyMem_RawMalloc(sizeof(thread_ctx));
 	if (!p || !ctx) {
 	    Py_FatalError("Can't allocate memory for thread context");
 	}
@@ -55,14 +56,14 @@ free_thread_ctx(thread_ctx* ctx)
     if (ctx->perl->refcnt == 0) {
 	free_perl(ctx->perl->my_perl);
 	ctx->perl->my_perl = 0;
-	PyMem_Free(ctx->perl);
+	PyMem_RawFree(ctx->perl);
     }
     else {
 	/* fprintf(stderr, "still %d references left\n", ctx->perl->refcnt); */
 	ctx->perl->thread_done++;
     }
     ctx->perl = 0;
-    PyMem_Free(ctx);
+    PyMem_RawFree(ctx);
 }
 
 void
@@ -80,8 +81,8 @@ thrd_ctx_init()
 #ifdef BOOT_FROM_PERL
     {
 	dTHX;
-	refcounted_perl* p = (refcounted_perl*)PyMem_Malloc(sizeof(refcounted_perl));
-	thread_ctx* ctx = (thread_ctx*)PyMem_Malloc(sizeof(thread_ctx));
+	refcounted_perl* p = (refcounted_perl*)PyMem_RawMalloc(sizeof(refcounted_perl));
+	thread_ctx* ctx = (thread_ctx*)PyMem_RawMalloc(sizeof(thread_ctx));
 	if (!p || !ctx) {
 	    Py_FatalError("Can't allocate memory for thread context");
 	}

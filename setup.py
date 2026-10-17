@@ -15,7 +15,7 @@ import subprocess
 MULTI_PERL = os.path.isfile("MULTI_PERL")
 BOOT_FROM_PERL = os.path.isfile("BOOT_FROM_PERL")
 
-p = os.popen("perl -MExtUtils::Embed -e 'ccopts();print \"\n\"; ldopts()'")
+p = os.popen(perl + ' ./opts.pl')
 perl_ccopts = p.readline().strip()
 perl_ldopts = p.readline().strip()
 p.close()
@@ -57,7 +57,7 @@ if sys.platform[:3] == "win":
     import shutil
     svrv_object_c_name = "svrv_object.cpp"
     if os.path.exists(svrv_object_c_name):
-        os.chmod(svrv_object_c_name, 777)
+        os.chmod(svrv_object_c_name, 0o777)
         os.unlink(svrv_object_c_name)
     shutil.copy("svrv_object.c", svrv_object_c_name)
 
@@ -112,12 +112,12 @@ if not os.path.isfile("try_perlapi.c") or \
         os.path.getmtime("try_perlapi.c") < os.path.getmtime("try_perlapi.pl"):
             os.system(perl + " try_perlapi.pl")
 
-if sys.argv[1] == "test" or sys.argv[1] == "build" or sys.argv[1] == "install":
+if len(sys.argv) > 1 and sys.argv[1] in ("test", "build", "install"):
     cwd=os.getcwd()
     ldpath = '%s/Python-Object/blib/arch/auto/Python/Object' % cwd
     perllib = '%s/Python-Object/blib/lib' % cwd
     perlarchlib = '%s/Python-Object/blib/arch' % cwd
-    os.environ["PERL5LIB"] = "%s:%s%s" % (perllib, perlarchlib, (":"+os.environ["PERL5LIB"] if "PERL5LIB" in os.environ else ''))
+    os.environ["PERL5LIB"] = os.pathsep.join([perllib, perlarchlib] + ([os.environ["PERL5LIB"]] if "PERL5LIB" in os.environ else []))
     os.environ["LD_LIBRARY_PATH"] = "%s%s" % (ldpath, (":"+os.environ["LD_LIBRARY_PATH"] if "LD_LIBRARY_PATH" in os.environ else ''))
     os.environ["PYTHON"] = sys.executable
 
@@ -162,7 +162,14 @@ ext_modules.extend(extra_ext)
 class build_perl(build):
     def run(self):
         os.chdir('Python-Object')
-        build.spawn(self, ['perl','Makefile.PL', 'INSTALLDIRS=vendor'], 'Python-Object')
+        makefile_pl = [perl, 'Makefile.PL']
+        # distro perls install modules into vendor dirs; a self-built perl
+        # (perlbrew, Strawberry, ...) has none and would install into '/'
+        vendorarch = subprocess.run([perl, '-MConfig', '-e', 'print $Config{installvendorarch}'],
+                                    capture_output=True, text=True).stdout.strip()
+        if vendorarch:
+            makefile_pl.append('INSTALLDIRS=vendor')
+        build.spawn(self, makefile_pl)
         build.spawn(self, ['make'])
         os.chdir('..')
         build.run(self)

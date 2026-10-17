@@ -285,12 +285,10 @@ ROWID    = TYPE()
 
 
 # Exceptions
-import exceptions
-
-class Error(exceptions.Exception):
+class Error(Exception):
     pass
 
-class Warning(exceptions.Exception):
+class Warning(Exception):
     pass
 
 class InterfaceError(Error):

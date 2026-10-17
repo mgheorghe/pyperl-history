@@ -544,16 +544,20 @@ PyObject_Str(o,...)
    PREINIT:
      dCTX;
      PyObject *str_o;
+     const char *str_s = NULL;
+     Py_ssize_t str_len;
    CODE:
      ASSERT_LOCK_PERL;
      ENTER_PYTHON;
      str_o = (ix == 1) ? PyObject_Str(o) : PyObject_Repr(o);
+     if (str_o && PyUnicode_Check(str_o))
+         str_s = PyUnicode_AsUTF8AndSize(str_o, &str_len);
      PERL_LOCK;
-     if (str_o && PyUnicode_Check(str_o)) {
-    RETVAL = newSVpvn(PyUnicode_AsUTF8(str_o),
-              PyUnicode_GetLength(str_o));
+     if (str_s) {
+    RETVAL = newSVpvn(str_s, str_len);
      }
      else {
+    PyErr_Clear();
     RETVAL = newSV(0);
      }
      Py_XDECREF(str_o);
@@ -709,21 +713,24 @@ PyEval_CallObjectWithKeywords(o,...)
                         goto done;
 
                     ENTER_PERL;
-                    for (i = 0; i < items; i++) {
+                    for (i = 0; i < alen; i++) {
                         SV** svp;
+                        PyObject *item;
                         ASSERT_LOCK_PERL;
                         svp = av_fetch(av, i, 0);
+
+                        PYTHON_LOCK;
                         if (svp) {
-                            PyObject *item;
-
-                            PYTHON_LOCK;
                             item = sv2pyo(*svp);
-
-                            PERL_UNLOCK;
-                            PyTuple_SetItem(t1, i, item);
-
-                            ENTER_PERL;
                         }
+                        else {  /* hole in the array; a tuple slot must not stay NULL */
+                            Py_INCREF(Py_None);
+                            item = Py_None;
+                        }
+                        PERL_UNLOCK;
+                        PyTuple_SetItem(t1, i, item);
+
+                        ENTER_PERL;
                     }
                     alist = t1;
                 }
@@ -737,7 +744,9 @@ PyEval_CallObjectWithKeywords(o,...)
             kwdict = PerlPyObject_pyo_or_null(ST(2));
             if (kwdict) {
                 ENTER_PYTHON;
-                if (!PyDict_Check(alist)) { 
+                if (!PyDict_Check(kwdict)) {
+                    PyErr_SetString(PyExc_TypeError, "3rd argument must be a dictionary");
+                    goto done;
                 }
                 ENTER_PERL;
             }
@@ -790,6 +799,13 @@ PyEval_CallObjectWithKeywords(o,...)
         }
 
         ENTER_PYTHON;
+        if (alist == NULL) {
+            /* unlike PyEval_CallObjectWithKeywords(), PyObject_Call() needs a tuple */
+            t1 = PyTuple_New(0);
+            if (t1 == NULL)
+                goto done;
+            alist = t1;
+        }
         RETVAL = PyObject_Call(o, alist, kwdict);
         done:
             Py_XDECREF(t1);
@@ -1019,6 +1035,7 @@ Exception(...)
     Python::Err::UnicodeError = 25
     Python::Err::ValueError = 26
     Python::Err::ZeroDivisionError = 27
+    Python::Err::StandardError = 28
       PREINIT:
         dCTX;
     PyObject* e;
@@ -1056,6 +1073,8 @@ Exception(...)
 #endif
     case 26: e = PyExc_ValueError; break;
     case 27: e = PyExc_ZeroDivisionError; break;
+    /* python 3 has no StandardError; still documented in Python::Err */
+    case 28: e = PyExc_Exception; break;
     default: croak("Bad exception selector (%d)", (int)ix); break;
     }
     if (items) {
@@ -1067,8 +1086,10 @@ Exception(...)
              else {
         arg = PerlPyObject_pyo_or_null(argsv);
              }
-            /* XXX should actually do a ISA test here */
-        RETVAL = boolSV(arg == e);
+        /* ISA test, so that e.g. ImportError matches ModuleNotFoundError */
+        PYTHON_LOCK;
+        RETVAL = boolSV(arg && PyErr_GivenExceptionMatches(arg, e));
+        PYTHON_UNLOCK;
     }
     else {
         PYTHON_LOCK;
