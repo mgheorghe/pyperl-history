@@ -16,8 +16,8 @@ perl = 'perl'
 import os
 import sys
 import subprocess
-if subprocess.run([perl, "-e", "exit($] < 5.024)"]).returncode != 0:
-    sys.exit("pyperl needs perl 5.24 or newer")
+if subprocess.run([perl, "-e", "exit($] < 5.010001)"]).returncode != 0:
+    sys.exit("pyperl needs perl 5.10.1 or newer")
 
 MULTI_PERL = os.path.isfile("MULTI_PERL")
 if MULTI_PERL and subprocess.run([perl, "-MConfig", "-e", "print $Config{useithreads} ? 1 : 0"],
