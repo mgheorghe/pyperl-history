@@ -39,6 +39,7 @@ jobs:
             python: "3.15"
             perl: "5.44"
             threads: true
+            no_multi_perl: true
           - name: newest MULTI_PERL
             os: ubuntu-26.04
             python: "3.15"
@@ -97,13 +98,8 @@ jobs:
           perl -V:version -V:useithreads -V:useshrplib -V:installvendorarch
           cc --version | head -1
 
-      - name: Enable MULTI_PERL
-        if: ${{ matrix.multi_perl }}
-        run: touch MULTI_PERL
-
       - name: Disable MULTI_PERL
-        # MULTI_PERL needs an ithreads perl
-        if: ${{ !matrix.multi_perl }}
+        if: ${{ matrix.no_multi_perl }}
         run: rm -f MULTI_PERL
 
       - name: Build
@@ -114,6 +110,7 @@ jobs:
           export PYTHONPATH="$(ls -d "$PWD"/build/lib.*)"
           export PERL5LIB="$PWD/Python-Object/blib/lib:$PWD/Python-Object/blib/arch"
           export LD_LIBRARY_PATH="$PWD/Python-Object/blib/arch/auto/Python/Object"
+          python -c "import perl; print('MULTI_PERL =', perl.MULTI_PERL)"
           python -m unittest discover -s tests -p '*.py' -v
           python test.py
 
