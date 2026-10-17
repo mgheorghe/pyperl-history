@@ -108,15 +108,15 @@ jobs:
       - name: Test
         run: |
           export PYTHONPATH="$(ls -d "$PWD"/build/lib.*)"
-          export PERL5LIB="$PWD/Python-Object/blib/lib:$PWD/Python-Object/blib/arch"
-          export LD_LIBRARY_PATH="$PWD/Python-Object/blib/arch/auto/Python/Object"
           python -c "import perl; print('MULTI_PERL =', perl.MULTI_PERL)"
           python -m unittest discover -s tests -p '*.py' -v
           python test.py
 
-      - name: Install and use from a clean directory
+      - name: pip install and test the installed copy
         run: |
-          # distro perl: root-owned vendor dirs
-          ${{ matrix.system && 'sudo' || '' }} "$(command -v python)" setup.py install
+          pip install .
           cd "$RUNNER_TEMP"
           python -c 'import perl; assert perl.eval("3+3") == 6; print("pyperl OK with perl", perl.eval("sprintf q{%vd}, $^V"))'
+          cd "$GITHUB_WORKSPACE"
+          python -m unittest discover -s tests -p '*.py'
+          python test.py

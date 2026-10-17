@@ -2,9 +2,9 @@ use ExtUtils::MakeMaker;
 use Config;
 
 my $python = $ENV{PYTHON} || 'python';
-chomp(my $pyinc = `$python -c 'from distutils.sysconfig import get_config_var; print("-I" + get_config_var("INCLUDEPY"))'`);
-chomp(my $pylib = `$python -c 'from distutils.sysconfig import get_config_var; print(get_config_var("BLDLIBRARY"))'`);
-chomp(my $pysitelib = `$python -c 'from distutils.sysconfig import get_python_lib; print(get_python_lib(1))'`);
+chomp(my $pyinc = `$python -c 'import sysconfig; print("-I" + sysconfig.get_config_var("INCLUDEPY"))'`);
+chomp(my $pylib = `$python -c 'import sysconfig; print(sysconfig.get_config_var("BLDLIBRARY") or "")'`);
+chomp(my $pysitelib = `$python -c 'import sysconfig; print(sysconfig.get_paths()["platlib"])'`);
 
 
 my @define;
