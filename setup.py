@@ -24,7 +24,6 @@ ext_name     = "perl"
 include_dirs = []
 macros       = []
 cc_extra     = []
-cc_extra.append(perl_ccopts)
 
 for x in perl_ccopts.split():
     if x[:2] == '-I':
