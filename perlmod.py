@@ -118,7 +118,7 @@ Perl = PerlClass()
 INC = {}
 
 try:
-    from thread import get_ident
+    from _thread import get_ident
 except ImportError:
     def get_ident():
         return 1

@@ -58,10 +58,10 @@ sub {
     print "ok 5\n";
 
     eval {
-       apply($f, []);
+       apply($f, [], {b => 2});
     };
     #print $@;
-    print "not " unless "$@" =~ /^python\.<type 'exceptions.TypeError'>: ok\(\) takes at least 1 argument \(0 given\)/;
+    print "not " unless "$@" =~ /^python\.<type 'exceptions.TypeError'>: ok\(\) takes at least 1 non-keyword argument \(0 given\)/;
     print "ok 6\n";
 
     eval {

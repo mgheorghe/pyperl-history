@@ -1,7 +1,7 @@
 import sys
 
 try:
-    import thread
+    import _thread
 except:
     print("1..0")
     sys.exit(0)
@@ -53,7 +53,7 @@ def t1():
     print("ok 3")
     sys.stdout.flush();
 
-thread.start_new_thread(t1, ())
+_thread.start_new_thread(t1, ())
 
 import time
 time.sleep(2)

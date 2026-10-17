@@ -1,7 +1,7 @@
 import perl
 #if perl.MULTI_PERL:
-#    print "1..0"
-#    raise SystemExit
+#	print "1..0"
+#	raise SystemExit
 
 print("1..6")
 
@@ -16,25 +16,25 @@ obj = perl.callm("new", "TestClass")
 
 # Test plain method calls
 
-if obj.foo(42) != None: print("not")
+if obj.foo(42) != None: print("not", end=' ')
 print("ok 1")
 
-if obj.foo() != 42: print("not")
+if obj.foo() != 42: print("not", end=' ')
 print("ok 2")
 
 my_dict = {}
 obj.foo(my_dict)
 
-if obj.foo() is not my_dict: print("not")
+if obj.foo() is not my_dict: print("not", end=' ')
 print("ok 3")
 
 obj.foo(obj.newhash("key", 42))
 try:
-    obj.dump()
+	obj.dump()
 except perl.PerlError as v:
-    print(v)
+	print(v)
 
-if int(obj.hash_deref(obj.foo(), "key")) != 42: print("not")
+if int(obj.hash_deref(obj.foo(), "key")) != 42: print("not", end=' ')
 print("ok 4")
 
 # calling in scalar/array context
@@ -44,20 +44,20 @@ print("ok 4")
 
 # callin back to python
 class Foo:
-    def foo(self, a):
-        #print "method foo called with argument", a
-        return 12/a
-    pass
+	def foo(self, a):
+		#print "method foo called with argument", a
+		return 12/a
+	pass
 
 p_obj = Foo()
 x = obj.callback(p_obj, "foo", 3)
-if x != 4: print("not")
+if x != 4: print("not", end=' ')
 print("ok 5")
 
 try:
    obj.callback(p_obj, "foo", 0)
 except ZeroDivisionError as v:
-   if str(v) != "integer division or modulo by zero": print("not")
+   if str(v) != "integer division or modulo by zero": print("not", end=' ')
    print("ok 6")
 
 

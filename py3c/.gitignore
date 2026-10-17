@@ -1,7 +1,0 @@
-/doc/build/
-/test/build/
-__pycache__/
-/py3c.pc
-.eggs
-dist
-*.egg-info

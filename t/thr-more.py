@@ -1,15 +1,15 @@
 import perl
 if perl.MULTI_PERL:
-    print("1..0")
-    raise SystemExit
+	print("1..0")
+	raise SystemExit
 
 
 try:
-    import thread
+	import _thread
 except:
-    print("1..0")
-    print("Threads not supported by python")
-    raise SystemExit
+	print("1..0")
+	print("Threads not supported by python")
+	raise SystemExit
 
 print("1..1")
 import time
@@ -39,9 +39,9 @@ def done():
 def t1():
     start()
     global inc, i0
-    if i0 != inc[0]: print("not")
+    if i0 != inc[0]: print("not", end=' ')
     print("ok 1");
     done()
 
-thread.start_new_thread(t1, ())
+_thread.start_new_thread(t1, ())
 wait()

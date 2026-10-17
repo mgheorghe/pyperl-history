@@ -6,18 +6,18 @@ print("1..2")
 import perl
 
 addr = perl.eval("""
-require Socket;
-Socket::pack_sockaddr_in(80, Socket::inet_aton('127.0.0.1'));
-""");
+                 require Socket;
+                 Socket::pack_sockaddr_in(80, Socket::inet_aton('127.0.0.1'));
+                 """);
 
-#print repr(addr);
+#print(repr(addr));
 
-if not addr: print("not ")
+if not addr: print("not ", end=' ')
 print("ok 1");
 
 addr = perl.call_tuple("Socket::unpack_sockaddr_in", addr)
-#print addr
+#print(repr(addr))
 
-if addr[0] != 80 or len(addr[1]) != 4: print("not ")
+if addr[0] != 80 or len(addr[1]) != 4: print("not ", end=' ')
 print("ok 2")
 

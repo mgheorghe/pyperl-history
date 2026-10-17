@@ -3,8 +3,6 @@
 
 #include <XSUB.h>
 
-#include <py3c.h>
-
 /* Python < 2.5 compat */
 #if PY_VERSION_HEX < 0x02050000 && !defined(PY_SSIZE_T_MIN)
 typedef int Py_ssize_t;
@@ -34,7 +32,7 @@ typedef struct {
 
 extern PyTypeObject SVRVtype;
 
-#define PySVRV_Check(v)  (Py_TYPE(v) == &SVRVtype)
+#define PySVRV_Check(v)  ((v)->ob_type == &SVRVtype)
 #define PySVRV_RV(v)     (((PySVRV*)(v))->rv)
 
 PyObject* PySVRV_New(SV* rv);

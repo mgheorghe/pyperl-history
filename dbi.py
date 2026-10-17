@@ -40,7 +40,8 @@ The first parameter is the data_source string (something beginning with "DBI:").
 Then there is a username and a password and at last other named configuration
 parameters like; RaiseError, PrintError and AutoCommit.
 """
-    dbh = perl.callm("connect", "DBI", data_source, username, password, dict2hash(attr))
+    dbh = perl.callm("connect", "DBI", data_source, username, password,
+            dict2hash(attr))
     return dbh
 
 def available_drivers():
@@ -52,8 +53,8 @@ def data_sources(driver):
 def trace(level, filename=None):
     return perl.callm("trace", "DBI", level, filename)
 
-def dict2hash(dict):
-    hash = perl.get_ref("%")
-    hash.update(dict)
-    return hash
+def dict2hash(dict_):
+    hash_ = perl.get_ref("%")
+    hash_.update(dict_)
+    return hash_
 
