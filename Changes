@@ -21,6 +21,9 @@
     MULTI_PERL is ignored for perls without ithreads, and
     setup.py install no longer deletes it.
 
+    Free-threaded Python: works with the GIL re-enabled on import;
+    refuses to import when the GIL is forced off.
+
     GitHub Actions CI replaces Travis CI.
 
 2021-08-03   Shlomi Fish <shlomif@cpan.org>
