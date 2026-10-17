@@ -24,6 +24,13 @@
     Free-threaded Python: works with the GIL re-enabled on import;
     refuses to import when the GIL is forced off.
 
+    Windows support with Strawberry Perl: built with its gcc,
+    Python::Object linked into the extension, per-thread perls
+    destroyed from a fiber-local-storage callback.
+
+    PERL_SYS_INIT3() is called before perl is started, and the perl
+    ref type is readied with PyType_Ready().
+
     GitHub Actions CI replaces Travis CI.
 
 2021-08-03   Shlomi Fish <shlomif@cpan.org>

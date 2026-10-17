@@ -5,6 +5,9 @@
 EXTERN_C void xs_init (pTHX);
 
 EXTERN_C void boot_DynaLoader (pTHX_ CV* cv);
+#ifdef WIN32
+EXTERN_C void boot_Python__Object (pTHX_ CV* cv);
+#endif
 
 EXTERN_C void
 xs_init(pTHX)
@@ -15,4 +18,8 @@ xs_init(pTHX)
 
     /* DynaLoader is a special case */
     newXS("DynaLoader::boot_DynaLoader", boot_DynaLoader, file);
+#ifdef WIN32
+    /* linked in statically, see setup.py */
+    newXS("Python::Object::bootstrap", boot_Python__Object, file);
+#endif
 }

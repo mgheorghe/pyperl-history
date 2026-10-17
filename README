@@ -16,7 +16,7 @@ Requirements:
     files (tested: 5.24 to 5.44); e.g. libperl-dev on Debian/Ubuntu,
     perl-devel and perl-ExtUtils-Embed on RHEL/Fedora
   - a C compiler and make
-  - Linux or macOS; Windows is not supported yet
+  - Linux, macOS, or Windows with Strawberry Perl (its gcc builds pyperl)
 
 Free-threaded Python builds work: importing perl re-enables the GIL
 (Python prints a RuntimeWarning), and the import fails if the GIL was
@@ -31,7 +31,8 @@ or straight from GitHub:
     pip install git+https://github.com/mgheorghe/pyperl
 
 The Perl side (Python::Object) is installed next to the extension, so
-nothing is added to perl's own library.
+nothing is added to perl's own library.  On Windows a pyperl-dll.pth
+file is installed as well; it lets Python find perl5xx.dll.
 
 Two flavours can be built.  With the MULTI_PERL file present (the
 default in this repository) each Python thread gets its own perl
