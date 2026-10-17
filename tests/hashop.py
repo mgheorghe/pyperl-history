@@ -80,6 +80,17 @@ class TestPyPerlHashOp(unittest.TestCase):
         del self.h["bar"]
         self.assertEqual(list(self.h.keys()), ["foo"])
 
+    def test_non_utf8_keys(self):
+        h = perl.eval('{ "\\xe9" => 1, "abc" => 2 }')
+        self.assertEqual(set(h.keys()), {b"\xe9", "abc"})
+        self.assertEqual(dict(h.items())[b"\xe9"], 1)
+        self.assertTrue(b"\xe9" in h)
+        self.assertEqual(h[b"\xe9"], 1)
+        h[b"\xff"] = 3
+        self.assertEqual(h.get(b"\xff"), 3)
+        del h[b"\xff"]
+        self.assertFalse(b"\xff" in h)
+
 def test_main():
     from test import test_support
     test_support.run_unittest(TestPyPerlHashOp)

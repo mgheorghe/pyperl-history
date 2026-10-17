@@ -166,10 +166,13 @@ do_hash_kv(HV* hv, bool do_keys, bool do_values)
     while ( (entry = hv_iternext(hv))) {
 	PyObject *k;
 	if (do_keys) {
-	    I32 klen;
-	    char *kstr = hv_iterkey(entry, &klen);
+	    SV* key_sv = HeKLEN(entry) == HEf_SVKEY ? SvREFCNT_inc(HeKEY_sv(entry))
+						      : newSVhek(HeKEY_hek(entry));
 	    ENTER_PYTHON;
-	    k = PyUnicode_FromStringAndSize(kstr, klen);
+	    PERL_LOCK;
+	    k = sv2pyo(key_sv);
+	    SvREFCNT_dec(key_sv);
+	    PERL_UNLOCK;
 	    if (k == NULL)
 		goto FAIL;
 	    ENTER_PERL;
@@ -220,6 +223,18 @@ FAIL:
 static int array_index(AV* av, PyObject *v);
 static void type_error(char *msg, SV* sv);
 
+static const char *
+hv_key(PyObject *key, Py_ssize_t *len)
+{
+    char *s;
+    if (PyBytes_Check(key))
+	return PyBytes_AsStringAndSize(key, &s, len) < 0 ? NULL : s;
+    if (PyUnicode_Check(key))
+	return PyUnicode_AsUTF8AndSize(key, len);
+    PyErr_SetString(PyExc_TypeError, "perl hash key must be string");
+    return NULL;
+}
+
 static int
 pysvrv_contains(PySVRV *self, PyObject *value)
 {
@@ -236,11 +251,7 @@ pysvrv_contains(PySVRV *self, PyObject *value)
 	Py_ssize_t keylen;
 	bool exists;
 
-	if (!PyUnicode_Check(value)) {
-	    PyErr_SetString(PyExc_TypeError, "perl hash key must be string");
-	    return -1;
-	}
-	if (!(key = PyUnicode_AsUTF8AndSize(value, &keylen)))
+	if (!(key = hv_key(value, &keylen)))
 	    return -1;
 
 	ENTER_PERL;
@@ -1638,9 +1649,9 @@ pysvrv_subscript(PySVRV *self, PyObject *key)
 	HV* hv = (HV*)sv;
 	Py_ssize_t key_len;
 	const char *key_str;
-	if (PyUnicode_Check(key)) {
+	if (PyUnicode_Check(key) || PyBytes_Check(key)) {
 	    SV** svp;
-	    if (!(key_str = PyUnicode_AsUTF8AndSize(key, &key_len)))
+	    if (!(key_str = hv_key(key, &key_len)))
 		return NULL;
 	    ENTER_PERL;
 	    svp = hv_fetch(hv, key_str, key_len, 0);
@@ -1744,8 +1755,8 @@ pysvrv_ass_sub(PySVRV *self, PyObject *key, PyObject *val)
 	HV* hv = (HV*)sv;
 	Py_ssize_t key_len;
 	const char *key_str;
-	if (PyUnicode_Check(key)) {
-	    if (!(key_str = PyUnicode_AsUTF8AndSize(key, &key_len)))
+	if (PyUnicode_Check(key) || PyBytes_Check(key)) {
+	    if (!(key_str = hv_key(key, &key_len)))
 		return -1;
 	    if (val) {
 		SV* val_sv;
