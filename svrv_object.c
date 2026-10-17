@@ -164,74 +164,59 @@ static PyObject*
 do_hash_kv(HV* hv, bool do_keys, bool do_values)
 {
     /* assumes we have the python lock only on entry */
-    register HE *entry;
-    register PyObject* list;
-    int i;
-    int len;
+    HE *entry;
+    PyObject* list;
     dCTXP;
 
     ASSERT_LOCK_PYTHON;
     assert(do_keys || do_values);
 
+    list = PyList_New(0);
+    if (list == NULL)
+	return NULL;
+
     ENTER_PERL;
     SET_CUR_PERL;
-    len = HvKEYS(hv);
-  
-    ENTER_PYTHON;
-    list = PyList_New(len);
-    if (list == NULL) {
-	ASSERT_LOCK_PYTHON;
-	return NULL;
-    }
-
-    ENTER_PERL;
-    i = 0;
     hv_iterinit(hv);
     while ( (entry = hv_iternext(hv))) {
-	PyObject *k;
-	if (do_keys) {
-	    SV* key_sv = HeKLEN(entry) == HEf_SVKEY ? SvREFCNT_inc(HeKEY_sv(entry))
-						      : newSVhek(HeKEY_hek(entry));
-	    ENTER_PYTHON;
-	    PERL_LOCK;
+	PyObject *k = NULL, *v = NULL, *item;
+	SV* key_sv = NULL;
+	SV* val_sv = NULL;
+
+	if (do_keys)
+	    key_sv = HeKLEN(entry) == HEf_SVKEY ? SvREFCNT_inc(HeKEY_sv(entry))
+						: newSVhek(HeKEY_hek(entry));
+	if (do_values) {
+	    val_sv = hv_iterval(hv, entry);
+	    SvGETMAGIC(val_sv);  /* FETCH for tied hashes */
+	}
+
+	ENTER_PYTHON;
+	PERL_LOCK;
+	if (key_sv) {
 	    k = sv2pyo(key_sv);
 	    SvREFCNT_dec(key_sv);
-	    PERL_UNLOCK;
-	    if (k == NULL)
-		goto FAIL;
-	    ENTER_PERL;
 	}
-	if (do_values) {
-	    SV* val_sv = hv_iterval(hv, entry);
-	    PyObject *v;
-
-	    ENTER_PYTHON;
-	    PERL_LOCK;
+	if (val_sv)
 	    v = sv2pyo(val_sv);
-	    PERL_UNLOCK;
-	    if (do_keys) {
-		PyObject *t = PyTuple_New(2);
-		if (t == NULL) {
-		    if (do_keys) Py_DECREF(k);
-		    goto FAIL;
-		}
-		/* These can't fail :-) */
-		PyTuple_SetItem(t, 0, k);
-		PyTuple_SetItem(t, 1, v);
-		v = t;
-	    }
-	    if (PyList_SetItem(list, i, v) == -1) {
-		Py_DECREF(v);
-		goto FAIL;
-	    }
-	    ENTER_PERL;
+	PERL_UNLOCK;
+
+	if ((do_keys && !k) || (do_values && !v))
+	    item = NULL;
+	else if (k && v)
+	    item = PyTuple_Pack(2, k, v);
+	else {
+	    item = k ? k : v;
+	    Py_INCREF(item);
 	}
-	else if (PyList_SetItem(list, i, k) == -1) {
-	    ENTER_PYTHON;
-	    Py_DECREF(k);
+	Py_XDECREF(k);
+	Py_XDECREF(v);
+	if (item == NULL || PyList_Append(list, item) < 0) {
+	    Py_XDECREF(item);
 	    goto FAIL;
-	};
-	i++;
+	}
+	Py_DECREF(item);
+	ENTER_PERL;
     }
 
     ENTER_PYTHON;
