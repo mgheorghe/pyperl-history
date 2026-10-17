@@ -87,10 +87,21 @@ propagate_errsv()
     }
     else {
     char *s;
+    int utf8;
+    PyObject *msg;
     PYTHON_UNLOCK;
     s = SvPV(ERRSV, n_a);
+    utf8 = SvUTF8(ERRSV);
     ENTER_PYTHON;
-    PyErr_SetString(PerlError, s);
+    msg = PyUnicode_DecodeUTF8(s, n_a, utf8 ? "surrogateescape" : NULL);
+    if (!msg) {  /* byte string that is not UTF-8 */
+        PyErr_Clear();
+        msg = PyUnicode_DecodeLatin1(s, n_a, NULL);
+    }
+    if (msg) {
+        PyErr_SetObject(PerlError, msg);
+        Py_DECREF(msg);
+    }
     PERL_LOCK;
     }
 
@@ -416,6 +427,8 @@ eval(self, args)
      PyObject *args;
 {
     char* code;
+    Py_ssize_t code_len;
+    SV* code_sv;
     SV* res_sv;
     PyObject* res_pyo;
     int errsv;
@@ -423,7 +436,7 @@ eval(self, args)
 
     ASSERT_LOCK_PYTHON;
   
-    if (!PyArg_ParseTuple(args, "s:perl.eval", &code))
+    if (!PyArg_ParseTuple(args, "s#:perl.eval", &code, &code_len))
     return NULL;
 
     ENTER_PERL;
@@ -434,7 +447,14 @@ eval(self, args)
     RESTORE_UNSAFE_ENV;
 
     fflush(stdout);
-    res_sv = eval_pv(code, FALSE);
+    code_sv = newSVpvn_flags(code, code_len, SVf_UTF8);
+    eval_sv(code_sv, G_SCALAR);
+    SvREFCNT_dec(code_sv);
+    {
+        dSP;
+        res_sv = POPs;
+        PUTBACK;
+    }
     errsv = SvTRUE(ERRSV);
   
     ENTER_PYTHON;

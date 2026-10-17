@@ -114,17 +114,41 @@ pysvrv_dealloc(PySVRV *self)
 }
 
 
+/* a negative *klen marks a UTF-8 key for perl's hv_* functions */
+static const char *
+hv_key(PyObject *key, I32 *klen)
+{
+    char *s;
+    const char *u;
+    Py_ssize_t len;
+    if (PyBytes_Check(key)) {
+	if (PyBytes_AsStringAndSize(key, &s, &len) < 0)
+	    return NULL;
+	*klen = (I32)len;
+	return s;
+    }
+    if (PyUnicode_Check(key)) {
+	if (!(u = PyUnicode_AsUTF8AndSize(key, &len)))
+	    return NULL;
+	*klen = PyUnicode_IS_ASCII(key) ? (I32)len : -(I32)len;
+	return u;
+    }
+    PyErr_Format(PyExc_TypeError, "perl hash key must be string, not %.200s", Py_TYPE(key)->tp_name);
+    return NULL;
+}
+
 static PyObject*
 pysvrv_has_key(PySVRV *self, PyObject *args)
 {
-    char *key;
-    Py_ssize_t keylen;
+    PyObject *keyobj;
+    const char *key;
+    I32 keylen;
     int exists;
     dCTXP;
 
     ASSERT_LOCK_PYTHON;
     CHECK_OWNED_PY;
-    if (!PyArg_ParseTuple(args, "s#:has_key", &key, &keylen))
+    if (!PyArg_ParseTuple(args, "O:has_key", &keyobj) || !(key = hv_key(keyobj, &keylen)))
 	return NULL;
 
     ENTER_PERL;
@@ -223,18 +247,6 @@ FAIL:
 static int array_index(AV* av, PyObject *v);
 static void type_error(char *msg, SV* sv);
 
-static const char *
-hv_key(PyObject *key, Py_ssize_t *len)
-{
-    char *s;
-    if (PyBytes_Check(key))
-	return PyBytes_AsStringAndSize(key, &s, len) < 0 ? NULL : s;
-    if (PyUnicode_Check(key))
-	return PyUnicode_AsUTF8AndSize(key, len);
-    PyErr_SetString(PyExc_TypeError, "perl hash key must be string");
-    return NULL;
-}
-
 static int
 pysvrv_contains(PySVRV *self, PyObject *value)
 {
@@ -248,7 +260,7 @@ pysvrv_contains(PySVRV *self, PyObject *value)
     sv = SvRV(self->rv);
     if (SvTYPE(sv) == SVt_PVHV) {
 	const char *key;
-	Py_ssize_t keylen;
+	I32 keylen;
 	bool exists;
 
 	if (!(key = hv_key(value, &keylen)))
@@ -462,15 +474,16 @@ pysvrv_copy(PySVRV *self, PyObject *args)
 static PyObject*
 pysvrv_get(PySVRV *self, PyObject *args)
 {
-    char *key;
-    Py_ssize_t keylen;
+    PyObject *keyobj;
+    const char *key;
+    I32 keylen;
     PyObject *failobj = Py_None;
     SV** svp;
     dCTXP;
 
     ASSERT_LOCK_PYTHON;
     CHECK_OWNED_PY;
-    if (!PyArg_ParseTuple(args, "s#|O:get", &key, &keylen, &failobj))
+    if (!PyArg_ParseTuple(args, "O|O:get", &keyobj, &failobj) || !(key = hv_key(keyobj, &keylen)))
 	return NULL;
 
     ENTER_PERL;
@@ -1647,7 +1660,7 @@ pysvrv_subscript(PySVRV *self, PyObject *key)
     }
     else if (SvTYPE(sv) == SVt_PVHV) {
 	HV* hv = (HV*)sv;
-	Py_ssize_t key_len;
+	I32 key_len;
 	const char *key_str;
 	if (PyUnicode_Check(key) || PyBytes_Check(key)) {
 	    SV** svp;
@@ -1753,7 +1766,7 @@ pysvrv_ass_sub(PySVRV *self, PyObject *key, PyObject *val)
     }
     else if (SvTYPE(sv) == SVt_PVHV) {
 	HV* hv = (HV*)sv;
-	Py_ssize_t key_len;
+	I32 key_len;
 	const char *key_str;
 	if (PyUnicode_Check(key) || PyBytes_Check(key)) {
 	    if (!(key_str = hv_key(key, &key_len)))
