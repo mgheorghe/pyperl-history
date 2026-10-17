@@ -3,7 +3,7 @@
     Release 1.0.4 (https://github.com/mgheorghe/pyperl)
 
     Builds and passes its tests with current compilers (gcc 15,
-    clang 17), Python 3.6 to 3.15 and Perl 5.24 to 5.44, with and
+    clang 17), Python 3.6 to 3.15 and Perl 5.10.1 to 5.44, with and
     without MULTI_PERL, on Linux and macOS.
 
     Fix Python 3 crashes and wrong results: apply() without

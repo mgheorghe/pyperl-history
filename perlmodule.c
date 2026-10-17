@@ -19,8 +19,8 @@
 #include "lang_map.h"
 #include "try_perlapi.h"
 
-#if PERL_VERSION < 24
-#error "pyperl needs perl 5.24 or newer"
+#if PERL_VERSION < 10 || (PERL_VERSION == 10 && PERL_SUBVERSION < 1)
+#error "pyperl needs perl 5.10.1 or newer"
 #endif
 
 #ifndef WIN32

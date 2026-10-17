@@ -17,6 +17,11 @@
 #ifndef CXp_EVALBLOCK
 #  define CXp_EVALBLOCK CXp_TRYBLOCK  /* older perls */
 #endif
+#if PERL_VERSION < 12
+#  define PUSHEVAL_TRY(cx) PUSHEVAL(cx, 0, 0)
+#else
+#  define PUSHEVAL_TRY(cx) PUSHEVAL(cx, 0)  /* unused from 5.24 */
+#endif
 
 static LOGOP dummy_op;
 
@@ -42,9 +47,15 @@ fake_entertry(void)
     ENTER;
     SAVETMPS;
 
+#if PERL_VERSION >= 24
     cx = cx_pushblock((CXt_EVAL|CXp_EVALBLOCK), gimme,
                       PL_stack_sp, PL_savestack_ix);
     cx_pusheval(cx, NULL, NULL);
+#else
+    PUSHBLOCK(cx, (CXt_EVAL|CXp_TRYBLOCK), PL_stack_sp);
+    PUSHEVAL_TRY(cx);
+    cx->blk_eval.retop = NULL;  /* where die_unwind() resumes */
+#endif
     PL_in_eval = EVAL_INEVAL;
     CLEAR_ERRSV();
 }
@@ -55,6 +66,7 @@ fake_leavetry(I32 oldcxix)
     dCTXP;
     /* already popped if perl died */
     if (cxstack_ix > oldcxix) {
+#if PERL_VERSION >= 24
         PERL_CONTEXT *cx = CX_CUR();
         assert(cxstack_ix == oldcxix + 1);
         assert(CxTYPE(cx) == CXt_EVAL);
@@ -62,6 +74,20 @@ fake_leavetry(I32 oldcxix)
         cx_popeval(cx);
         cx_popblock(cx);
         CX_POP(cx);
+#else
+        PERL_CONTEXT *cx;
+        PMOP *newpm;
+        SV **newsp;
+        I32 gimme, optype;
+
+        assert(cxstack_ix == oldcxix + 1);
+        POPBLOCK(cx, newpm);
+        POPEVAL(cx);
+        PL_curpm = newpm;
+        PERL_UNUSED_VAR(newsp);
+        PERL_UNUSED_VAR(gimme);
+        PERL_UNUSED_VAR(optype);
+#endif
     }
 
     FREETMPS;
