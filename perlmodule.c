@@ -791,6 +791,20 @@ array(PyObject *self, PyObject *args)
     return pyo;
 }
 
+#ifdef Py_GIL_DISABLED
+/* Python re-enables the GIL for us on import unless it was forced off */
+static int
+gil_forced_off(void)
+{
+    PyObject *flags = PySys_GetObject("flags");
+    PyObject *gil = flags ? PyObject_GetAttrString(flags, "gil") : NULL;
+    int off = gil && PyLong_Check(gil) && PyLong_AsLong(gil) == 0;
+    Py_XDECREF(gil);
+    PyErr_Clear();
+    return off;
+}
+#endif
+
 static PyMethodDef PerlMethods[] = {
     { "call",        (PyCFunction)(void (*)(void))call,        METH_VARARGS|METH_KEYWORDS},
     { "call_tuple",  (PyCFunction)(void (*)(void))call_tuple,  METH_VARARGS|METH_KEYWORDS},
@@ -832,6 +846,12 @@ PyInit_perl(void)
 
 {
     PyObject *m, *d;
+#ifdef Py_GIL_DISABLED
+    if (gil_forced_off()) {
+        PyErr_SetString(PyExc_ImportError, "perl needs the GIL, which was disabled with PYTHON_GIL=0 or -X gil=0");
+        return NULL;
+    }
+#endif
 #ifndef MULTI_PERL
     char *embedding[6];
     int argc = embedding_args(embedding);

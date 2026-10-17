@@ -57,6 +57,12 @@ jobs:
             perl: "5.44"
             threads: true
             optional: true
+          - name: free-threaded (optional)
+            os: ubuntu-26.04
+            python: "3.15t"
+            perl: "5.44"
+            threads: true
+            optional: true
           - name: macOS (optional)
             os: macos-latest
             python: "3.15"
@@ -120,6 +126,12 @@ jobs:
           python -c "import perl; print('MULTI_PERL =', perl.MULTI_PERL)"
           python -m unittest discover -s tests -p '*.py' -v
           python test.py
+
+      - name: Refuse to run with the GIL forced off
+        if: ${{ endsWith(matrix.python, 't') }}
+        run: |
+          export PYTHONPATH="$(ls -d "$PWD"/build/lib.*)"
+          PYTHON_GIL=0 python -c 'import perl' 2>&1 | grep "perl needs the GIL"
 
       - name: pip install and test the installed copy
         run: |

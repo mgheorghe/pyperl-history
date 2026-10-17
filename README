@@ -18,6 +18,10 @@ Requirements:
   - a C compiler and make
   - Linux or macOS; Windows is not supported yet
 
+Free-threaded Python builds work: importing perl re-enables the GIL
+(Python prints a RuntimeWarning), and the import fails if the GIL was
+forced off with PYTHON_GIL=0 or -X gil=0.
+
 Install (with 'perl' on your PATH being the perl to embed):
 
     pip install .
