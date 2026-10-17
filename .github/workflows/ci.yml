@@ -95,9 +95,15 @@ jobs:
           multi-thread: ${{ matrix.threads == true }}
           distribution: ${{ matrix.perl_distribution || 'default' }}
 
-      - name: Put Strawberry's gcc first on PATH
+      - name: Put Strawberry Perl ahead of Git's perl in bash
         if: ${{ runner.os == 'Windows' }}
-        run: perl -MConfig -MFile::Spec -le 'print File::Spec->rel2abs("$Config{bin}/../../c/bin")' >> "$GITHUB_PATH"
+        shell: pwsh
+        run: |
+          function unix($p) { $p = (Resolve-Path $p).Path -replace '\\', '/'; '/' + $p.Substring(0, 1).ToLower() + $p.Substring(2) }
+          $bin = Split-Path (Get-Command perl).Source
+          $env_sh = "$env:RUNNER_TEMP\strawberry.sh"
+          "export PATH=`"$(unix $bin):$(unix "$bin\..\..\c\bin"):`$PATH`"" | Out-File -Encoding ascii $env_sh
+          "BASH_ENV=$(unix $env_sh)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       - name: Install extra packages
         if: ${{ matrix.apt }}
