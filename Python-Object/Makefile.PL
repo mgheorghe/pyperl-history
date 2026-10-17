@@ -1,4 +1,5 @@
 use ExtUtils::MakeMaker;
+use Config;
 
 my $python = $ENV{PYTHON} || 'python';
 chomp(my $pyinc = `$python -c 'from distutils.sysconfig import get_config_var; print("-I" + get_config_var("INCLUDEPY"))'`);
@@ -9,7 +10,7 @@ chomp(my $pysitelib = `$python -c 'from distutils.sysconfig import get_python_li
 my @define;
 my @libs;
 
-push(@define, "MULTI_PERL") if -f "../MULTI_PERL";
+push(@define, "MULTI_PERL") if -f "../MULTI_PERL" && $Config{useithreads};
 
 push(@libs, $pylib);
 
