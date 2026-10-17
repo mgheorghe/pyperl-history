@@ -39,7 +39,7 @@ jobs:
             python: "3.15"
             perl: "5.44"
             threads: true
-            multi_perl: false
+            no_multi_perl: true
           - name: newest MULTI_PERL
             os: ubuntu-26.04
             python: "3.15"
@@ -99,7 +99,7 @@ jobs:
           cc --version | head -1
 
       - name: Disable MULTI_PERL
-        if: ${{ matrix.multi_perl == false }}
+        if: ${{ matrix.no_multi_perl }}
         run: rm -f MULTI_PERL
 
       - name: Build
