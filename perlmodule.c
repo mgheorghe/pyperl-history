@@ -3,6 +3,9 @@
  * This is a python extension module that embeds perl.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE  /* dladdr() */
+#endif
 #include <EXTERN.h>
 #include <perl.h>
 #define PY_SSIZE_T_CLEAN
@@ -16,8 +19,71 @@
 #include "lang_map.h"
 #include "try_perlapi.h"
 
+#ifndef WIN32
+#include <dlfcn.h>
+#endif
+
 static PyObject *PerlError;
 extern void xs_init (pTHXo);
+
+/* "-I<dir of this extension>/pyperl-perl" if that bundle exists, else NULL */
+static char *
+bundled_inc(void)
+{
+    static char inc[4100];
+    static int done = 0;
+    char path[4000];
+    char *sep;
+    struct stat st;
+
+    if (done)
+        return inc[0] ? inc : NULL;
+    done = 1;
+#ifdef WIN32
+    {
+        HMODULE h;
+        DWORD n;
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                (LPCSTR)&bundled_inc, &h))
+            return NULL;
+        n = GetModuleFileNameA(h, path, sizeof(path) - 16);
+        if (n == 0 || n >= sizeof(path) - 16)
+            return NULL;
+        sep = strrchr(path, '\\');
+    }
+#else
+    {
+        Dl_info info;
+        if (!dladdr((void *)&bundled_inc, &info) || !info.dli_fname ||
+            strlen(info.dli_fname) >= sizeof(path) - 16)
+            return NULL;
+        strcpy(path, info.dli_fname);
+        sep = strrchr(path, '/');
+    }
+#endif
+    if (!sep)
+        return NULL;
+    strcpy(sep + 1, "pyperl-perl");
+    if (stat(path, &st) == 0)
+        sprintf(inc, "-I%s", path);
+    return inc[0] ? inc : NULL;
+}
+
+/* perl_parse() arguments; argv needs room for 6 entries */
+static int
+embedding_args(char **argv)
+{
+    int argc = 0;
+    char *inc = bundled_inc();
+    argv[argc++] = "";
+    if (inc)
+        argv[argc++] = inc;
+    argv[argc++] = "-mPython::Object";
+    argv[argc++] = "-e";
+    argv[argc++] = "$| = 1;";
+    argv[argc] = NULL;
+    return argc;
+}
 
 #ifdef MULTI_PERL
 
@@ -25,7 +91,8 @@ PerlInterpreter *
 new_perl(void)
 {
     PerlInterpreter *p;
-    char *embedding[] = { "", "-mPython::Object", "-e", "$| = 1;", NULL };
+    char *embedding[6];
+    int argc = embedding_args(embedding);
 
     p = perl_alloc();
 #if 0
@@ -33,9 +100,9 @@ new_perl(void)
 #endif
     perl_construct(p);
 #ifdef BOOT_FROM_PERL
-    perl_parse(p, 0, 4, embedding, NULL);
+    perl_parse(p, 0, argc, embedding, NULL);
 #else
-    perl_parse(p, xs_init, 4, embedding, NULL);
+    perl_parse(p, xs_init, argc, embedding, NULL);
 #endif
     perl_run(p);
 
@@ -830,14 +897,15 @@ PyInit_perl()
 {
     PyObject *m, *d;
 #ifndef MULTI_PERL
-    char *embedding[] = { "", "-mPython::Object", "-e", "$| = 1;" };
+    char *embedding[6];
+    int argc = embedding_args(embedding);
 #if !defined(USE_ITHREADS)
     PerlInterpreter *main_perl;
 #endif
 
     main_perl = perl_alloc();
     perl_construct(main_perl);
-    perl_parse(main_perl, xs_init, 4, embedding, NULL);
+    perl_parse(main_perl, xs_init, argc, embedding, NULL);
     perl_run(main_perl);
 
     fake_inittry();

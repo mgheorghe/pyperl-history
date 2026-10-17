@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
 from setuptools import setup, Extension
-from distutils.command.install import install
-from distutils.command.build import build
+from setuptools.command.install import install
+try:
+    from setuptools.command.build import build
+except ImportError:  # setuptools < 62.4
+    from distutils.command.build import build
 import sysconfig
 import os
 
@@ -175,8 +178,13 @@ class build_perl(build):
         build.spawn(self, ['make'])
         os.chdir('..')
         build.run(self)
+        # perlmodule.c puts this bundle on perl's @INC
+        bundle = os.path.join(self.build_lib, 'pyperl-perl')
+        for part in ('lib', 'arch'):
+            self.copy_tree(os.path.join('Python-Object', 'blib', part), bundle)
 
-class my_install(install):
+# a perl that boots python needs Python::Object in its own library
+class boot_from_perl_install(install):
 
     def run(self):
         self.run_command('build')
@@ -196,7 +204,7 @@ setup (name        = "pyperl",
         author_email= "gisle@ActiveState.com",
         py_modules  = ['dbi', 'dbi2', 'perlpickle', 'perlmod'],
         ext_modules = ext_modules,
-        cmdclass    = { 'install': my_install, 'build': build_perl},
+        cmdclass    = dict(build=build_perl, **({'install': boot_from_perl_install} if BOOT_FROM_PERL else {})),
         test_suite  = "tests"
         )
 
