@@ -1076,10 +1076,8 @@ Exception(...)
     case 21: e = PyExc_SystemError; break;
     case 22: e = PyExc_SystemExit; break;
     case 23: e = PyExc_TypeError; break;
-#if PY_MAJOR_VERSION >= 1 && PY_MINOR_VERSION >= 6
     case 24: e = PyExc_UnboundLocalError; break;
     case 25: e = PyExc_UnicodeError; break;
-#endif
     case 26: e = PyExc_ValueError; break;
     case 27: e = PyExc_ZeroDivisionError; break;
     /* StandardError is gone in Python 3 */

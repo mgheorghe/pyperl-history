@@ -855,7 +855,6 @@ pysvrv_pop(PySVRV *self, PyObject *args)
     AV* av;
     I32 len;
     int i = -1;
-    SV* sv;
     dCTXP;
 
     ASSERT_LOCK_PYTHON;
@@ -1191,19 +1190,6 @@ static PyMethodDef pysvrv_methods[] = {
     {NULL, NULL} /* sentinel */
 };
 
-static PyMethodDef list_methods[] = {
-    {"append",	(PyCFunction)pysvrv_append,  METH_VARARGS},
-    {"insert",	(PyCFunction)pysvrv_insert,  METH_VARARGS},
-    {"extend",  (PyCFunction)pysvrv_extend,  METH_VARARGS},
-    {"pop",	(PyCFunction)pysvrv_pop,     METH_VARARGS},
-    {"remove",	(PyCFunction)pysvrv_remove,  METH_VARARGS},
-    {"index",	(PyCFunction)pysvrv_index,   METH_VARARGS},
-    {"count",	(PyCFunction)pysvrv_count,   METH_VARARGS},
-    {"reverse",	(PyCFunction)pysvrv_reverse, METH_NOARGS},
-    {"sort",	(PyCFunction)pysvrv_sort,    METH_VARARGS},
-    {"av_alloc",(PyCFunction)pysvrv_av_alloc,METH_NOARGS},
-    {NULL, NULL} /* sentinel */
-};
 
 
 static PyObject*
@@ -1211,7 +1197,7 @@ pysvrv_getattro(PySVRV *self, PyObject *nameobj)
 {
     PyObject *val;
     dCTXP;
-    char *name = "";
+    const char *name = "";
 
     ASSERT_LOCK_PYTHON;
     CHECK_OWNED_PY;
@@ -1329,7 +1315,7 @@ pysvrv_setattro(PySVRV *self, PyObject *nameobj, PyObject *val)
 {
     int status;
     dCTXP;
-    char *name = "";
+    const char *name = "";
 
     ASSERT_LOCK_PYTHON;
     CHECK_OWNED_INT;
@@ -1366,7 +1352,7 @@ pysvrv_setattro(PySVRV *self, PyObject *nameobj, PyObject *val)
     }
     else if (strcmp(name, "__class__") == 0) {
 	if (PyUnicode_Check(val)) {
-	    char *klass = PyUnicode_AsUTF8(val);
+	    const char *klass = PyUnicode_AsUTF8(val);
 	    ENTER_PERL;
 	    sv_bless(self->rv, gv_stashpv(klass, 1));
 	    ENTER_PYTHON;
@@ -1588,7 +1574,6 @@ pysvrv_item(PySVRV *self, Py_ssize_t index)
 static PyObject *pysvrv_slice(PySVRV *self, Py_ssize_t ilow, Py_ssize_t ihigh);
 static int pysvrv_ass_slice(PySVRV *self, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v);
 
-#if PY_MAJOR_VERSION >= 3
 /* Python 3 passes slices to mp_subscript */
 static int
 slice_bounds(PySVRV *self, PyObject *slice, Py_ssize_t *ilow, Py_ssize_t *ihigh)
@@ -1606,7 +1591,6 @@ slice_bounds(PySVRV *self, PyObject *slice, Py_ssize_t *ilow, Py_ssize_t *ihigh)
     PySlice_AdjustIndices(len, ilow, ihigh, step);
     return 0;
 }
-#endif
 
 static PyObject*
 pysvrv_subscript(PySVRV *self, PyObject *key)
@@ -1623,14 +1607,12 @@ pysvrv_subscript(PySVRV *self, PyObject *key)
     sv = SvRV(self->rv);
     if (SvTYPE(sv) == SVt_PVAV) {
 	I32 index;
-#if PY_MAJOR_VERSION >= 3
 	if (PySlice_Check(key)) {
 	    Py_ssize_t ilow, ihigh;
 	    if (slice_bounds(self, key, &ilow, &ihigh) < 0)
 		return NULL;
 	    return pysvrv_slice(self, ilow, ihigh);
 	}
-#endif
 	if (PyLong_Check(key)) {
 	    index = PyLong_AsLong(key);
 	    if (index == -1 && PyErr_Occurred())
@@ -1700,14 +1682,12 @@ pysvrv_ass_sub(PySVRV *self, PyObject *key, PyObject *val)
 	SV* val_sv;
 	SV** svp;
 
-#if PY_MAJOR_VERSION >= 3
 	if (PySlice_Check(key)) {
 	    Py_ssize_t ilow, ihigh;
 	    if (slice_bounds(self, key, &ilow, &ihigh) < 0)
 		return -1;
 	    return pysvrv_ass_slice(self, ilow, ihigh, val);
 	}
-#endif
 	if (PyLong_Check(key)) {
 	    index = PyLong_AsLong(key);
 	    if (index == -1 && PyErr_Occurred())
@@ -1916,7 +1896,6 @@ pysvrv_repeat(PySVRV *self, Py_ssize_t n)
 	AV* res;
 	I32 res_size;
 	I32 i, j;
-	SV** svp;
 	SV* sv;
 
 	if (n < 0)
@@ -2110,9 +2089,6 @@ static PyNumberMethods pysvrv_as_number = {
 	0,	/*nb_add*/
 	0,	/*nb_subtract*/
 	0,	/*nb_multiply*/
-#if PY_MAJOR_VERSION < 3
-	0, 	/*nb_divide*/
-#endif
 	0,	/*nb_remainder*/
 	0,	/*nb_divmod*/
 	0,	/*nb_power*/
@@ -2141,22 +2117,11 @@ static PyMappingMethods pysvrv_as_mapping = {
 };
 
 static PySequenceMethods pysvrv_as_sequence = {
-#if PY_MAJOR_VERSION >= 3
     .sq_length = (lenfunc)pysvrv_length,
     .sq_concat = (binaryfunc)pysvrv_concat,
     .sq_repeat = (ssizeargfunc)pysvrv_repeat,
     .sq_item = (ssizeargfunc)pysvrv_item,
     .sq_contains = (objobjproc)pysvrv_contains,
-#else
-    (lenfunc)pysvrv_length, /*sq_length*/
-    (binaryfunc)pysvrv_concat, /*sq_concat*/
-    (ssizeargfunc)pysvrv_repeat, /*sq_repeat*/
-    (ssizeargfunc)pysvrv_item, /*sq_item*/
-    (ssizessizeargfunc)pysvrv_slice, /*sq_slice*/
-    0, /*sq_ass_item*/
-    (ssizessizeobjargproc)pysvrv_ass_slice, /*sq_ass_slice*/
-    0, /*sq_contains*/
-#endif
 };
 
 

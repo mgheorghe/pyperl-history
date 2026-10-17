@@ -132,7 +132,7 @@ PerlInterpreter *main_perl = 0;
 
 
 void
-propagate_errsv()
+propagate_errsv(void)
 {
     STRLEN n_a;
     dCTXP;
@@ -206,8 +206,8 @@ call_perl(char *method, SV* obj, I32 gimme,
         }
         m_obj = PyTuple_GetItem(args, 0);
         m_obj = PyObject_Str(m_obj); /* need decrement refcount after call */
-        assert(PyString_Check(m_obj));
-        method = PyUnicode_AsUTF8(m_obj);
+        assert(PyUnicode_Check(m_obj));
+        method = (char *)PyUnicode_AsUTF8(m_obj);
         argfirst = 1;
     }
     else if (!obj && !arglen) {
@@ -265,10 +265,10 @@ call_perl(char *method, SV* obj, I32 gimme,
     if (keywds) {
     Py_ssize_t pos = 0;
     PyObject *key;
-    char *key_str;
+    const char *key_str;
     PyObject *val;
     while (PyDict_Next(keywds, &pos, &key, &val)) {
-        assert(PyString_Check(key));
+        assert(PyUnicode_Check(key));
         key_str = PyUnicode_AsUTF8(key);
       
         if (key_str[0] == '_' && key_str[1] == '_')
@@ -336,10 +336,7 @@ call_perl(char *method, SV* obj, I32 gimme,
 #include "opcode.c"
 
 static PyObject *
-safecall(self, args, keywds)
-     PyObject *self;
-     PyObject *args;
-     PyObject *keywds;
+safecall(PyObject *self, PyObject *args, PyObject *keywds)
 {
     char *root;
     char *op_mask;
@@ -404,7 +401,7 @@ safecall(self, args, keywds)
 static void
 restore_unsafe_env(thread_ctx *ctx)
 {
-    PerlInterpreter *my_perl = ctx->perl->my_perl;
+    PerlInterpreter *my_perl PERL_UNUSED_DECL = ctx->perl->my_perl;
 
     save_hptr(&PL_defstash);
     save_hptr(&PL_curstash);
@@ -449,49 +446,35 @@ unsafe_call_perl(char *method, SV* obj, I32 gimme,
 
 
 static PyObject *
-call(self, args, keywds)
-     PyObject *self;
-     PyObject *args;
-     PyObject *keywds;
+call(PyObject *self, PyObject *args, PyObject *keywds)
 {
     return CALL_PERL(0, 0, G_SCALAR, args, keywds);
 }
 
 
 static PyObject *
-call_tuple(self, args, keywds)
-     PyObject *self;
-     PyObject *args;
-     PyObject *keywds;
+call_tuple(PyObject *self, PyObject *args, PyObject *keywds)
 {
     return CALL_PERL(0, 0, G_ARRAY, args, keywds);
 }
 
 
 static PyObject *
-callm(self, args, keywds)
-     PyObject *self;
-     PyObject *args;
-     PyObject *keywds;
+callm(PyObject *self, PyObject *args, PyObject *keywds)
 {
     return CALL_PERL("", 0, G_SCALAR, args, keywds);
 }
 
 
 static PyObject *
-callm_tuple(self, args, keywds)
-     PyObject *self;
-     PyObject *args;
-     PyObject *keywds;
+callm_tuple(PyObject *self, PyObject *args, PyObject *keywds)
 {
     return CALL_PERL("", 0, G_ARRAY, args, keywds);
 }
 
 
 static PyObject *
-eval(self, args)
-     PyObject *self;
-     PyObject *args;
+eval(PyObject *self, PyObject *args)
 {
     char* code;
     Py_ssize_t code_len;
@@ -546,9 +529,7 @@ eval(self, args)
 
 
 static PyObject *
-require(self, args)
-     PyObject *self;
-     PyObject *args;
+require(PyObject *self, PyObject *args)
 {
     char *module;
     SV *code;
@@ -599,9 +580,7 @@ require(self, args)
 
 
 static PyObject *
-defined(self, args)
-     PyObject *self;
-     PyObject *args;
+defined(PyObject *self, PyObject *args)
 {
     char *name;
     char type;
@@ -649,23 +628,11 @@ defined(self, args)
     return Py_BuildValue("i", (sv != 0));
 }
 
-#define out_fh stdout
-#ifdef MYDEBUG
-#define TRACE(my_format, ...)                                                  \
-    fprintf(out_fh, my_format, __VA_ARGS__);                                   \
-    fflush(out_fh)
-#else
-#define TRACE(my_format, ...) {}
-#endif
 
 
 static PyObject *
-get_ref(self, args, keywds)
-     PyObject *self;
-     PyObject *args;
-     PyObject *keywds;
+get_ref(PyObject *self, PyObject *args, PyObject *keywds)
 {
-                  TRACE("sv[zooooooooopre]=%p\n", NULL);
     char *name;
     int create = 0;
     char type;
@@ -681,14 +648,12 @@ get_ref(self, args, keywds)
                      &name, &create))
     return NULL;
 
-                  TRACE("sv[after PyArg_ParseTupleAndKeywords]=%p\n", NULL);
     PERL_LOCK;
     SET_CUR_PERL;
 
     ENTER;
     RESTORE_UNSAFE_ENV;
 
-                  TRACE("sv[after RESTORE_UNSAFE_ENV]=%p\n", NULL);
     /* We assume that none of the stuff below can trigger perl code to
      * start running, so it is safe to hold both locks while doing this work.
      */
@@ -701,17 +666,11 @@ get_ref(self, args, keywds)
     name++;
     }
 
-                  TRACE("sv[after isIDFIRST]= name=%s type=%c\n", name, type);
     if (*name) {
     switch (type) {
     case '$': sv =      get_sv(name, create); break;
     case '@': sv = (SV*)get_av(name, create); break;
-    case '%': {
-                  TRACE("sv[pre]=%p\n", sv);
-                  sv = (SV*)get_hv(name, create);
-                  TRACE("sv=%p\n", sv);
-              }
-                  break;
+    case '%': sv = (SV*)get_hv(name, create); break;
     case '&': sv = (SV*)get_cv(name, create); break;
     default:
         LEAVE;
@@ -731,12 +690,7 @@ get_ref(self, args, keywds)
     switch (type) {
     case '$': sv =      newSV(0); break;
     case '@': sv = (SV*)newAV();  break;
-    case '%':{
-                  TRACE("sv[pre newHV]=%p\n", sv);
-                 sv = (SV*)newHV();
-                  TRACE("sv newHV=%p\n", sv);
-             }
-    break;
+    case '%': sv = (SV*)newHV();  break;
     default:
         LEAVE;
         PERL_UNLOCK;
@@ -746,29 +700,20 @@ get_ref(self, args, keywds)
     }
 
     sv = newRV_noinc(sv);
-                  TRACE("sv aftre newRV_noinc=%p\n", sv);
     pyo = PySVRV_New(sv);
-                  TRACE("sv aftre PySVRV_New=%p\n", sv);
     SvREFCNT_dec(sv);  /* since PySVRV_New incremented it */
-                  TRACE("sv aftre SvREFCNT_dec=%p\n", sv);
     LEAVE;
 
     PERL_UNLOCK;
     ASSERT_LOCK_PYTHON;
 
-                  TRACE("sv aftre ASSERT_LOCK_PYTHON=%p ; pyo=%p\n", sv, pyo);
-    TRACE("get_ref[%s] self=%p\n", "TRACE end", self);
     return pyo;
 }
 
 
 static PyObject *
-array(self, args, keywds)
-     PyObject *self;
-     PyObject *args;
-     PyObject *keywds;
+array(PyObject *self, PyObject *args)
 {
-    TRACE("array[%s] self=%p\n", "rightstart", self);
     PyObject *o;
     int n, i;
     AV* av;
@@ -776,7 +721,6 @@ array(self, args, keywds)
     PyObject *pyo;  /* return value */
     dCTXP;
 
-    TRACE("array[%s] self=%p\n", "start", self);
 
     ASSERT_LOCK_PYTHON;
 
@@ -844,24 +788,23 @@ array(self, args, keywds)
 }
 
 static PyMethodDef PerlMethods[] = {
-    { "call",        call,        METH_VARARGS|METH_KEYWORDS},
-    { "call_tuple",  call_tuple,  METH_VARARGS|METH_KEYWORDS},
-    { "callm",       callm,       METH_VARARGS|METH_KEYWORDS},
-    { "callm_tuple", callm_tuple, METH_VARARGS|METH_KEYWORDS},
+    { "call",        (PyCFunction)(void (*)(void))call,        METH_VARARGS|METH_KEYWORDS},
+    { "call_tuple",  (PyCFunction)(void (*)(void))call_tuple,  METH_VARARGS|METH_KEYWORDS},
+    { "callm",       (PyCFunction)(void (*)(void))callm,       METH_VARARGS|METH_KEYWORDS},
+    { "callm_tuple", (PyCFunction)(void (*)(void))callm_tuple, METH_VARARGS|METH_KEYWORDS},
 #ifdef MULTI_PERL
-    { "safecall",    safecall,    METH_VARARGS|METH_KEYWORDS},
+    { "safecall",    (PyCFunction)(void (*)(void))safecall,    METH_VARARGS|METH_KEYWORDS},
 #endif
     { "eval",        eval,        METH_VARARGS},
     { "require",     require,     METH_VARARGS},
     { "defined",     defined,     METH_VARARGS},
-    { "get_ref",     get_ref,     METH_VARARGS|METH_KEYWORDS},
+    { "get_ref",     (PyCFunction)(void (*)(void))get_ref,     METH_VARARGS|METH_KEYWORDS},
     { "array",       array,       METH_VARARGS},
 
     { NULL, NULL } /* Sentinel */
 };
 
 
-#if PY_MAJOR_VERSION >= 3
 static struct PyModuleDef ModuleDef = {
         PyModuleDef_HEAD_INIT,
         "perl",
@@ -873,27 +816,16 @@ static struct PyModuleDef ModuleDef = {
         NULL,
         NULL
 };
-#endif
 
 
-#if PY_MAJOR_VERSION < 3
-void
-#ifdef DL_HACK
-initperl2()
-#else
-initperl()
-#endif
-
-#else
 
 PyMODINIT_FUNC
 #ifdef DL_HACK
-PyInit_perl2()
+PyInit_perl2(void)
 #else
-PyInit_perl()
+PyInit_perl(void)
 #endif
 
-#endif
 {
     PyObject *m, *d;
 #ifndef MULTI_PERL
@@ -922,11 +854,9 @@ PyInit_perl()
      * python itself was embedded before we imported perl.
      */
 
-#if PY_MAJOR_VERSION >= 3
     m = PyModule_Create(&ModuleDef);
-#else
-    m = Py_InitModule("perl", PerlMethods);
-#endif
+    if (m == NULL)
+        return NULL;
 
     d = PyModule_GetDict(m);
     PerlError = PyErr_NewException("perl.PerlError", NULL, NULL);
@@ -937,7 +867,5 @@ PyInit_perl()
     PyDict_SetItemString(d, "MULTI_PERL", PyLong_FromLong(0));
 #endif
 
-#if PY_MAJOR_VERSION >= 3
     return m;
-#endif
 }

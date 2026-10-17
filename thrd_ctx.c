@@ -60,7 +60,7 @@ free_thread_ctx(thread_ctx* ctx)
     }
     else {
 	/* fprintf(stderr, "still %d references left\n", ctx->perl->refcnt); */
-	ctx->perl->thread_done++;
+	ctx->perl->thread_done = TRUE;
     }
     ctx->perl = 0;
     PyMem_RawFree(ctx);
