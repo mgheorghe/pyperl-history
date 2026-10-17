@@ -1,0 +1,125 @@
+# Build pyperl and run its tests against the oldest, an intermediate and the
+# newest Python/Perl combination we support.
+#
+# Oldest Perl is 5.24: try_perlapi uses the cx_pushblock()/cx_pusheval()
+# context API introduced there. Oldest Python is 3.10 (Ubuntu 22.04's).
+# Perls come prebuilt from shogo82148/actions-setup-perl; its Linux builds use
+# -Duseshrplib -fPIC, which embedding perl into a Python extension needs.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  schedule:
+    - cron: "0 6 * * 1"  # weekly, to notice new Python/Perl releases breaking us
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.optional == true }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: oldest (Python 3.10, Perl 5.24)
+            os: ubuntu-24.04
+            python: "3.10"
+            perl: "5.24"
+          - name: distro (Ubuntu 24.04 packages, Python 3.12, Perl 5.38)
+            os: ubuntu-24.04
+            system: true
+          - name: newest (Python 3.15, Perl 5.44)
+            os: ubuntu-26.04
+            python: "3.15"
+            perl: "5.44"
+            threads: true
+          - name: newest MULTI_PERL (Python 3.15, Perl 5.44)
+            os: ubuntu-26.04
+            python: "3.15"
+            perl: "5.44"
+            threads: true
+            multi_perl: true
+          - name: optional arm64 (Python 3.15, Perl 5.44)
+            os: ubuntu-26.04-arm
+            python: "3.15"
+            perl: "5.44"
+            threads: true
+            optional: true
+          - name: optional macOS (Python 3.15, Perl 5.44)
+            os: macos-latest
+            python: "3.15"
+            perl: "5.44"
+            optional: true
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python }}
+        if: ${{ !matrix.system }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Set up Perl ${{ matrix.perl }}
+        if: ${{ !matrix.system }}
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: ${{ matrix.perl }}
+          multi-thread: ${{ matrix.threads == true }}
+
+      - name: Install distro Python and Perl development packages
+        if: ${{ matrix.system }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-dev python3-venv libperl-dev
+
+      - name: Create virtualenv
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip setuptools
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Versions
+        run: |
+          python -VV
+          perl -V:version -V:useithreads -V:useshrplib -V:installvendorarch
+          cc --version | head -1
+
+      - name: Enable MULTI_PERL
+        if: ${{ matrix.multi_perl }}
+        run: touch MULTI_PERL
+
+      - name: Disable MULTI_PERL
+        # the repo ships MULTI_PERL; it needs an ithreads perl
+        if: ${{ !matrix.multi_perl }}
+        run: rm -f MULTI_PERL
+
+      - name: Build
+        run: python setup.py build
+
+      - name: Test
+        run: |
+          export PYTHONPATH="$(ls -d "$PWD"/build/lib.*)"
+          export PERL5LIB="$PWD/Python-Object/blib/lib:$PWD/Python-Object/blib/arch"
+          export LD_LIBRARY_PATH="$PWD/Python-Object/blib/arch/auto/Python/Object"
+          python -m unittest discover -s tests -p '*.py' -v
+          python test.py
+
+      - name: Install and use from a clean directory
+        run: |
+          # distro perl installs Python::Object into root-owned vendor dirs
+          ${{ matrix.system && 'sudo' || '' }} "$(command -v python)" setup.py install
+          cd "$RUNNER_TEMP"
+          python -c 'import perl; assert perl.eval("3+3") == 6; print("pyperl OK with perl", perl.eval("sprintf q{%vd}, $^V"))'

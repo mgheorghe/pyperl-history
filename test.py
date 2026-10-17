@@ -9,11 +9,14 @@ ok_re     = re.compile(r"^(not\s+)?ok\s+(\d+)$")
 
 def test_ok(f):
     expect_next = None
-    print(f )
+    print(f, end='')
     for i in range(20 - len(f)):
         sys.stdout.write(".")
+    sys.stdout.flush()
 
-    p = os.popen('"%s" %s' % (sys.executable, f))
+    # the tests expect to run from the top directory ("use lib 't'");
+    # -u keeps python's and perl's output in order
+    p = os.popen('"%s" -u %s' % (sys.executable, os.path.join("t", f)))
 
     ok = 1
 
@@ -44,17 +47,16 @@ def test_ok(f):
             else:
                 ok = 0
             continue
-    p.close()
-    if ok and (expect_next - 1) != expect_max:
+    if p.close():  # non-zero exit status, e.g. a crash
+        ok = 0
+    if ok and (expect_next is None or (expect_next - 1) != expect_max):
         ok = 0
 
     if (ok): print(" ok")
     else:    print(" failed")
     return ok
 
-os.chdir("t")
-
-files = os.listdir(".")
+files = os.listdir("t")
 files.sort()
 
 num_failed = 0
@@ -66,5 +68,6 @@ for f in files:
 print()
 if num_failed:
     print(num_failed, "TESTS FAILED" + ("!" * num_failed))
+    sys.exit(1)
 else:
     print("All tests passed.")
