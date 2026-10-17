@@ -37,10 +37,9 @@ class TestPyPerlHashOp(unittest.TestCase):
         self.assertEqual(self.h.get("foo"), 42)
 
     def test_hash_get_type_error(self):
-        try:
-            print((self.h.get(42)))
-        except TypeError as v:
-            self.assertEqual(str(v), "a bytes-like object is required, not 'int'")
+        with self.assertRaises(TypeError) as cm:
+            self.h.get(42)
+        self.assertEqual(str(cm.exception), "perl hash key must be string, not int")
 
     def test_hash_key_index(self):
         self.h["foo"] = 42

@@ -40,7 +40,7 @@ pyo2sv(PyObject *o)
 	    PyErr_Clear();
 	    return newPerlPyObject_inc(o);
 	}
-	return newSVpvn(s, len);
+	return newSVpvn_flags(s, len, PyUnicode_IS_ASCII(o) ? 0 : SVf_UTF8);
     }
     else if (PyBytes_Check(o)) {
 	return newSVpvn(PyBytes_AS_STRING(o), PyBytes_GET_SIZE(o));
@@ -76,18 +76,17 @@ pyo2sv(PyObject *o)
 }
 
 
-/* valid UTF-8 becomes str, anything else bytes */
+/* character strings (UTF8 flag) and ASCII become str, other byte strings bytes */
 static PyObject*
 pv2pyo(SV* sv, const char *s, STRLEN len)
 {
-    PyObject* po = PyUnicode_DecodeUTF8(s, (Py_ssize_t)len, NULL);
-    if (po == NULL && !SvUTF8(sv) &&
-        PyErr_ExceptionMatches(PyExc_UnicodeDecodeError))
-    {
-	PyErr_Clear();
-	po = PyBytes_FromStringAndSize(s, (Py_ssize_t)len);
-    }
-    return po;
+    STRLEN i;
+    if (SvUTF8(sv))
+	return PyUnicode_DecodeUTF8(s, (Py_ssize_t)len, "surrogateescape");
+    for (i = 0; i < len; i++)
+	if (s[i] & 0x80)
+	    return PyBytes_FromStringAndSize(s, (Py_ssize_t)len);
+    return PyUnicode_DecodeASCII(s, (Py_ssize_t)len, NULL);
 }
 
 PyObject*

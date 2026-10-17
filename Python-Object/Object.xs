@@ -554,7 +554,7 @@ PyObject_Str(o,...)
          str_s = PyUnicode_AsUTF8AndSize(str_o, &str_len);
      PERL_LOCK;
      if (str_s) {
-    RETVAL = newSVpvn(str_s, str_len);
+    RETVAL = newSVpvn_flags(str_s, str_len, PyUnicode_IS_ASCII(str_o) ? 0 : SVf_UTF8);
      }
      else {
     PyErr_Clear();
@@ -766,25 +766,29 @@ PyEval_CallObjectWithKeywords(o,...)
                     while( (entry = hv_iternext(hv))) {
                         PyObject *key;
                         PyObject *val;
+                        int rc;
 
-                        I32 klen;
-                        char *kstr;
+                        SV* key_sv;
                         SV* val_sv;
 
                         ASSERT_LOCK_PERL;
-                        kstr = hv_iterkey(entry, &klen);
+                        key_sv = hv_iterkeysv(entry);
                         val_sv = hv_iterval(hv, entry);
 
                         ENTER_PYTHON;
-                        key = PyUnicode_FromStringAndSize(kstr, klen);
-                        if (key == NULL)
-                            goto done;
-
                         PERL_LOCK;
-                        val = sv2pyo(val_sv);
+                        key = sv2pyo(key_sv);
+                        val = key ? sv2pyo(val_sv) : NULL;
                         PERL_UNLOCK;
+                        if (val == NULL) {
+                            Py_XDECREF(key);
+                            goto done;
+                        }
 
-                        if (PyDict_SetItem(t2, key, val) == -1)
+                        rc = PyDict_SetItem(t2, key, val);
+                        Py_DECREF(key);
+                        Py_DECREF(val);
+                        if (rc == -1)
                             goto done;
                         ENTER_PERL;
                     }
@@ -947,6 +951,7 @@ as_string(self,...)
       PREINIT:
         dCTX;
     PyObject *str;
+    int utf8 = 0;
       CODE:
         ASSERT_LOCK_PERL;
         ENTER_PYTHON;
@@ -956,6 +961,7 @@ as_string(self,...)
         if (str && PyUnicode_Check(str)) {
         sv_catpv(RETVAL, "python.");
             sv_catpv(RETVAL, PyUnicode_AsUTF8(str));
+            utf8 |= !PyUnicode_IS_ASCII(str);
         }
         else
             sv_catpv(RETVAL, "python");
@@ -970,10 +976,13 @@ as_string(self,...)
         PERL_LOCK;
             sv_catpv(RETVAL, ": ");
             sv_catpv(RETVAL, PyUnicode_AsUTF8(str));
+            utf8 |= !PyUnicode_IS_ASCII(str);
             PERL_UNLOCK;
         }
         Py_XDECREF(str);
         ENTER_PERL;
+    if (utf8)
+        SvUTF8_on(RETVAL);
     if (*SvEND(RETVAL) != '\n')
         sv_catpvn(RETVAL, "\n", 1);
       OUTPUT:
