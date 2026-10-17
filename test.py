@@ -14,8 +14,7 @@ def test_ok(f):
         sys.stdout.write(".")
     sys.stdout.flush()
 
-    # the tests expect to run from the top directory ("use lib 't'");
-    # -u keeps python's and perl's output in order
+    # run from the top dir (tests "use lib 't'"), unbuffered
     p = os.popen('"%s" -u %s' % (sys.executable, os.path.join("t", f)))
 
     ok = 1
@@ -47,7 +46,7 @@ def test_ok(f):
             else:
                 ok = 0
             continue
-    if p.close():  # non-zero exit status, e.g. a crash
+    if p.close():  # non-zero exit
         ok = 0
     if ok and (expect_next is None or (expect_next - 1) != expect_max):
         ok = 0

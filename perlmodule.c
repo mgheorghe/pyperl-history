@@ -768,11 +768,7 @@ static PyMethodDef PerlMethods[] = {
     { "require",     require,     METH_VARARGS},
     { "defined",     defined,     METH_VARARGS},
     { "get_ref",     get_ref,     METH_VARARGS|METH_KEYWORDS},
-#if PY_MAJOR_VERSION >= 3
-    { "__getitem__",       array,       METH_VARARGS},
-#else
     { "array",       array,       METH_VARARGS},
-#endif
 
     { NULL, NULL } /* Sentinel */
 };

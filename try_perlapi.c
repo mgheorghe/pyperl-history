@@ -14,6 +14,10 @@
 #include "lang_lock.h"
 #include "thrd_ctx.h"
 
+#ifndef CXp_EVALBLOCK
+#  define CXp_EVALBLOCK CXp_TRYBLOCK  /* older perls */
+#endif
+
 static LOGOP dummy_op;
 
 void
@@ -24,11 +28,12 @@ fake_inittry(void)
     dummy_op.op_next = Nullop;
 }
 
+/* like perl's create_eval_scope(), which is not exported */
 static void
-fake_entertry(PERL_CONTEXT **cx_ptr)
+fake_entertry(void)
 {
     PERL_CONTEXT *cx;
-    I32 gimme;
+    U8 gimme;
     dCTXP;
 
     PL_op = (OP*)&dummy_op;
@@ -36,42 +41,27 @@ fake_entertry(PERL_CONTEXT **cx_ptr)
 
     ENTER;
     SAVETMPS;
-    dMARK;
 
-//    Perl_push_return(aTHX_ Nullop);
-    *cx_ptr = cx = cx_pushblock((CXt_EVAL|CXp_TRYBLOCK), gimme, MARK, PL_stack_sp);
-    #define WITHOUT_PUSHEVAL
-    #ifndef WITHOUT_PUSHEVAL
-    PUSHEVAL(cx, 0);
-        #endif
-    PL_eval_root = PL_op;
+    cx = cx_pushblock((CXt_EVAL|CXp_EVALBLOCK), gimme,
+                      PL_stack_sp, PL_savestack_ix);
+    cx_pusheval(cx, NULL, NULL);
     PL_in_eval = EVAL_INEVAL;
-    sv_setpvn(ERRSV, "", 0);
+    CLEAR_ERRSV();
 }
 
 static void
-fake_leavetry(I32 oldscope, PERL_CONTEXT *cx)
+fake_leavetry(I32 oldcxix)
 {
     dCTXP;
-    if (PL_scopestack_ix > oldscope) {
-        PMOP *newpm;
-        I32 optype;
-        SV **newsp;
-        I32 gimme;
-
+    /* already popped if perl died */
+    if (cxstack_ix > oldcxix) {
+        PERL_CONTEXT *cx = CX_CUR();
+        assert(cxstack_ix == oldcxix + 1);
+        assert(CxTYPE(cx) == CXt_EVAL);
         CX_LEAVE_SCOPE(cx);
-        #if 0
-        cx_popsub(cx);
-                #endif
+        cx_popeval(cx);
         cx_popblock(cx);
-    #ifndef WITHOUT_PUSHEVAL
-        POPEVAL(cx);
-        #endif
-        #if 0
         CX_POP(cx);
-        #endif
-//        Perl_pop_return(aTHX);
-        PL_curpm = newpm;
     }
 
     FREETMPS;
@@ -83,13 +73,12 @@ try_array_len(AV* av)
 {
     dJMPENV;
     dCTXP;
-    PERL_CONTEXT *cx=NULL;
     int jmp_status;
-    volatile I32 oldscope = PL_scopestack_ix;
+    volatile I32 oldcxix = cxstack_ix;
     int RETVAL;
 
     ASSERT_LOCK_PERL;
-    fake_entertry(&cx);
+    fake_entertry();
 
     JMPENV_PUSH(jmp_status);
     if (jmp_status == 0) {
@@ -110,7 +99,7 @@ try_array_len(AV* av)
         fprintf(stderr, "should not happen, jmp_status = %d\n", jmp_status);
     }
     JMPENV_POP;
-    fake_leavetry(oldscope, cx);
+    fake_leavetry(oldcxix);
     return RETVAL;
 }
 
@@ -119,13 +108,12 @@ try_av_fetch(AV* av, I32 key, I32 lval)
 {
     dJMPENV;
     dCTXP;
-    PERL_CONTEXT *cx=NULL;
     int jmp_status;
-    volatile I32 oldscope = PL_scopestack_ix;
+    volatile I32 oldcxix = cxstack_ix;
     SV** RETVAL;
 
     ASSERT_LOCK_PERL;
-    fake_entertry(&cx);
+    fake_entertry();
 
     JMPENV_PUSH(jmp_status);
     if (jmp_status == 0) {
@@ -146,7 +134,7 @@ try_av_fetch(AV* av, I32 key, I32 lval)
         fprintf(stderr, "should not happen, jmp_status = %d\n", jmp_status);
     }
     JMPENV_POP;
-    fake_leavetry(oldscope, cx);
+    fake_leavetry(oldcxix);
     return RETVAL;
 }
 
@@ -155,13 +143,12 @@ try_SvGETMAGIC(SV* sv)
 {
     dJMPENV;
     dCTXP;
-    PERL_CONTEXT *cx=NULL;
     int jmp_status;
-    volatile I32 oldscope = PL_scopestack_ix;
+    volatile I32 oldcxix = cxstack_ix;
     int RETVAL;
 
     ASSERT_LOCK_PERL;
-    fake_entertry(&cx);
+    fake_entertry();
 
     JMPENV_PUSH(jmp_status);
     if (jmp_status == 0) {
@@ -183,7 +170,7 @@ try_SvGETMAGIC(SV* sv)
         fprintf(stderr, "should not happen, jmp_status = %d\n", jmp_status);
     }
     JMPENV_POP;
-    fake_leavetry(oldscope, cx);
+    fake_leavetry(oldcxix);
     return RETVAL;
 }
 
@@ -192,13 +179,12 @@ try_SvSETMAGIC(SV* sv)
 {
     dJMPENV;
     dCTXP;
-    PERL_CONTEXT *cx=NULL;
     int jmp_status;
-    volatile I32 oldscope = PL_scopestack_ix;
+    volatile I32 oldcxix = cxstack_ix;
     int RETVAL;
 
     ASSERT_LOCK_PERL;
-    fake_entertry(&cx);
+    fake_entertry();
 
     JMPENV_PUSH(jmp_status);
     if (jmp_status == 0) {
@@ -220,7 +206,7 @@ try_SvSETMAGIC(SV* sv)
         fprintf(stderr, "should not happen, jmp_status = %d\n", jmp_status);
     }
     JMPENV_POP;
-    fake_leavetry(oldscope, cx);
+    fake_leavetry(oldcxix);
     return RETVAL;
 }
 

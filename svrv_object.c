@@ -101,7 +101,7 @@ pysvrv_dealloc(PySVRV *self)
 	    free_perl(self->owned_by->my_perl);
 	    self->owned_by->my_perl = 0;
 	    ENTER_PYTHON;
-	    PyMem_Free((char*)(self->owned_by));
+	    PyMem_RawFree(self->owned_by);  /* allocated in thrd_ctx.c */
 	    ENTER_PERL;
 	}
     }
@@ -217,48 +217,50 @@ FAIL:
 }
 
 
+static int array_index(AV* av, PyObject *v);
+static void type_error(char *msg, SV* sv);
+
 static int
 pysvrv_contains(PySVRV *self, PyObject *value)
 {
-    char *key;
-    Py_ssize_t keylen;
-    bool exists;
-    PyObject *found;
-    SV** svp;
+    SV* sv;
     dCTXP;
 
-    if (!PyUnicode_Check(value)) {
-	PyErr_SetString(PyExc_TypeError, "perl hash key must be string");
-	return -1;
-    }
-
     ASSERT_LOCK_PYTHON;
-    CHECK_OWNED_PY;
-    key = PyUnicode_AsUTF8AndSize(value, &keylen);
-
-    ENTER_PERL;
+    CHECK_OWNED_INT;
     SET_CUR_PERL;
-    assert(SvTYPE(SvRV(self->rv)) == SVt_PVHV);
-    exists = hv_exists((HV*)SvRV(self->rv), key, keylen);
 
-    ENTER_PYTHON;
-#if PY_MAJOR_VERSION < 3
-    if (svp) {
-	PERL_LOCK;
-	found = sv2pyo(*svp);
-	PERL_UNLOCK;
-    } else {
-	if (PyErr_Occurred()) {
-	    Py_DECREF(key);
+    sv = SvRV(self->rv);
+    if (SvTYPE(sv) == SVt_PVHV) {
+	const char *key;
+	Py_ssize_t keylen;
+	bool exists;
+
+	if (!PyUnicode_Check(value)) {
+	    PyErr_SetString(PyExc_TypeError, "perl hash key must be string");
 	    return -1;
 	}
-	return 0;
+	if (!(key = PyUnicode_AsUTF8AndSize(value, &keylen)))
+	    return -1;
+
+	ENTER_PERL;
+	exists = hv_exists((HV*)sv, key, keylen);
+	ENTER_PYTHON;
+	return exists ? 1 : 0;
+    }
+    else if (SvTYPE(sv) == SVt_PVAV) {
+	int index;
+
+	ENTER_PERL;
+	index = array_index((AV*)sv, value);
+	ENTER_PYTHON;
+	if (index < 0)
+	    return PyErr_Occurred() ? -1 : 0;
+	return 1;
     }
 
-    return PyObject_RichCompareBool(value, found, Py_EQ);
-#else
-    return exists;
-#endif
+    type_error("Can't test membership in", sv);
+    return -1;
 }
 
 static PyObject*
@@ -919,7 +921,7 @@ array_index(AV* av, PyObject *v)
 	    PERL_UNLOCK;
 	    cmp = PyObject_RichCompareBool(x, v, Py_EQ);
 	    Py_DECREF(x);
-	    if (cmp == 0) {
+	    if (cmp > 0) {
 		ENTER_PERL;
 		return i;
 	    }
@@ -1044,7 +1046,7 @@ pysvrv_count(PySVRV *self, PyObject *args)
 	    PERL_UNLOCK;
 	    cmp = PyObject_RichCompareBool(x, v, Py_EQ);
 	    Py_DECREF(x);
-	    if (cmp == 0)
+	    if (cmp > 0)
 		count++;
 	    if (cmp == -1 && PyErr_Occurred()) {
 		ASSERT_LOCK_PYTHON;
@@ -1335,14 +1337,18 @@ pysvrv_setattro(PySVRV *self, PyObject *nameobj, PyObject *val)
 	status = 0;
     }
     else if (strcmp(name, "__methodname__") == 0) {
-	if (PyUnicode_Check(val)) {
+	Py_ssize_t len;
+	const char *s;
+	if (PyUnicode_Check(val) && (s = PyUnicode_AsUTF8AndSize(val, &len))) {
 	    PERL_LOCK;
 	    Safefree(self->methodname);
-	    New(998, self->methodname, PyUnicode_GetLength(val)+1, char);
-	    Copy(PyUnicode_AsUTF8(val), self->methodname,
-		 PyUnicode_GetLength(val)+1, char);
+	    New(998, self->methodname, len+1, char);
+	    Copy(s, self->methodname, len+1, char);
 	    PERL_UNLOCK;
 	    status = 0;
+	}
+	else if (PyErr_Occurred()) {
+	    status = -1;
 	}
 	else {
 	    PyErr_SetString(PyExc_TypeError, "__methodname__ must be string");
@@ -1570,6 +1576,29 @@ pysvrv_item(PySVRV *self, Py_ssize_t index)
 }
 
 
+static PyObject *pysvrv_slice(PySVRV *self, Py_ssize_t ilow, Py_ssize_t ihigh);
+static int pysvrv_ass_slice(PySVRV *self, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v);
+
+#if PY_MAJOR_VERSION >= 3
+/* Python 3 passes slices to mp_subscript */
+static int
+slice_bounds(PySVRV *self, PyObject *slice, Py_ssize_t *ilow, Py_ssize_t *ihigh)
+{
+    Py_ssize_t step, len;
+
+    if (PySlice_Unpack(slice, ilow, ihigh, &step) < 0)
+	return -1;
+    if (step != 1) {
+	PyErr_SetString(PyExc_ValueError, "perl array slice step must be 1");
+	return -1;
+    }
+    if ((len = pysvrv_length(self)) < 0)
+	return -1;
+    PySlice_AdjustIndices(len, ilow, ihigh, step);
+    return 0;
+}
+#endif
+
 static PyObject*
 pysvrv_subscript(PySVRV *self, PyObject *key)
 {
@@ -1585,9 +1614,15 @@ pysvrv_subscript(PySVRV *self, PyObject *key)
     sv = SvRV(self->rv);
     if (SvTYPE(sv) == SVt_PVAV) {
 	I32 index;
-	if (PyLong_Check(key))
-	    index = PyLong_AsLong(key);
-	else if (PyLong_Check(key)) {
+#if PY_MAJOR_VERSION >= 3
+	if (PySlice_Check(key)) {
+	    Py_ssize_t ilow, ihigh;
+	    if (slice_bounds(self, key, &ilow, &ihigh) < 0)
+		return NULL;
+	    return pysvrv_slice(self, ilow, ihigh);
+	}
+#endif
+	if (PyLong_Check(key)) {
 	    index = PyLong_AsLong(key);
 	    if (index == -1 && PyErr_Occurred())
 		val = NULL;
@@ -1601,10 +1636,14 @@ pysvrv_subscript(PySVRV *self, PyObject *key)
     }
     else if (SvTYPE(sv) == SVt_PVHV) {
 	HV* hv = (HV*)sv;
+	Py_ssize_t key_len;
+	const char *key_str;
 	if (PyUnicode_Check(key)) {
 	    SV** svp;
+	    if (!(key_str = PyUnicode_AsUTF8AndSize(key, &key_len)))
+		return NULL;
 	    ENTER_PERL;
-	    svp = hv_fetch(hv, PyUnicode_AsUTF8(key), PyUnicode_GetLength(key), 0);
+	    svp = hv_fetch(hv, key_str, key_len, 0);
 	    if (svp) {
 		SvGETMAGIC(*svp);
 		PYTHON_LOCK;
@@ -1652,9 +1691,15 @@ pysvrv_ass_sub(PySVRV *self, PyObject *key, PyObject *val)
 	SV* val_sv;
 	SV** svp;
 
-	if (PyLong_Check(key))
-	    index = PyLong_AsLong(key);
-	else if (PyLong_Check(key)) {
+#if PY_MAJOR_VERSION >= 3
+	if (PySlice_Check(key)) {
+	    Py_ssize_t ilow, ihigh;
+	    if (slice_bounds(self, key, &ilow, &ihigh) < 0)
+		return -1;
+	    return pysvrv_ass_slice(self, ilow, ihigh, val);
+	}
+#endif
+	if (PyLong_Check(key)) {
 	    index = PyLong_AsLong(key);
 	    if (index == -1 && PyErr_Occurred())
 		goto FAIL;
@@ -1697,9 +1742,11 @@ pysvrv_ass_sub(PySVRV *self, PyObject *key, PyObject *val)
     }
     else if (SvTYPE(sv) == SVt_PVHV) {
 	HV* hv = (HV*)sv;
+	Py_ssize_t key_len;
+	const char *key_str;
 	if (PyUnicode_Check(key)) {
-	    char *key_str = PyUnicode_AsUTF8(key);
-	    int   key_len = PyUnicode_GetLength(key);
+	    if (!(key_str = PyUnicode_AsUTF8AndSize(key, &key_len)))
+		return -1;
 	    if (val) {
 		SV* val_sv;
 		SV** svp;
@@ -1938,7 +1985,7 @@ pysvrv_slice(PySVRV *self, Py_ssize_t ilow, Py_ssize_t ihigh)
 
 	res = newAV();
 	if (ihigh != ilow)
-	    av_extend(av, ihigh - ilow - 1);
+	    av_extend(res, ihigh - ilow - 1);
 
 	for (i = ilow; i < ihigh; i++) {
 	    svp = av_fetch(av, i, 0);

@@ -15,11 +15,15 @@ initperl()
 PyInit_perl()
 #endif
 {
-    void* handle;
+    void* handle = NULL;
+    const char *err = NULL;
+    const char *s;
+    Py_ssize_t slen;
     int i, npath;
     size_t len;
     char buf[1024];
     struct stat sb;
+    static const char so_name[] = "/perl2" EXT_SUFFIX;
 
     PyObject *path = PySys_GetObject("path");
     if (path == NULL || !PyList_Check(path)) {
@@ -37,19 +41,27 @@ PyInit_perl()
 	PyObject *v = PyList_GetItem(path, i);
 	if (!PyUnicode_Check(v))
 	    continue;
-	len = PyUnicode_GetLength(v);
-	if (len + 10 >= sizeof(buf))
+	s = PyUnicode_AsUTF8AndSize(v, &slen);
+	if (s == NULL) {
+	    PyErr_Clear();
+	    continue;
+	}
+	len = (size_t)slen;
+	if (len + sizeof(so_name) > sizeof(buf))
 	    continue; /* Too long */
-	strcpy(buf, PyUnicode_AsUTF8(v));
+	strcpy(buf, s);
 	if (buf[0] != '/')
 	    continue; /* Not absolute */
 	if (strlen(buf) != len)
 	    continue; /* v contains '\0' */
 
-	strcpy(buf+len, "/perl2" EXT_SUFFIX);
+	strcpy(buf+len, so_name);
 
-	if (!stat(buf, &sb) && (handle = dlopen(buf, RTLD_NOW | RTLD_GLOBAL)))
-		break;
+	if (stat(buf, &sb))
+	    continue;
+	if ((handle = dlopen(buf, RTLD_NOW | RTLD_GLOBAL)))
+	    break;
+	err = dlerror();
     }
 
     if (handle) {
@@ -61,7 +73,8 @@ PyInit_perl()
 	    PyErr_SetString(PyExc_ImportError, "PyInit_perl2 entry point not found");
     }
     else
-	PyErr_SetString(PyExc_ImportError, dlerror());
+	PyErr_SetString(PyExc_ImportError,
+			err ? err : "perl2" EXT_SUFFIX " not found in sys.path");
 
 #if PY_MAJOR_VERSION >= 3
     return NULL;

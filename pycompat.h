@@ -24,6 +24,11 @@ typedef Py_ssize_t (*segcountproc)(PyObject *, Py_ssize_t *);
 typedef Py_ssize_t (*charbufferproc)(PyObject *, Py_ssize_t, char **);
 #endif
 
+#if PY_VERSION_HEX < 0x03040000
+#define PyMem_RawMalloc PyMem_Malloc
+#define PyMem_RawFree PyMem_Free
+#endif
+
 #if PY_MAJOR_VERSION < 3
 #define PyUnicode_AsUTF8 PyString_AsString
 #define PyUnicode_GetLength PyUnicode_GetSize
