@@ -8,12 +8,8 @@
  * make the symbols available for extension modules that perl might load.
  */
 
-extern PyMODINIT_FUNC
-#if PY_MAJOR_VERSION < 3
-initperl()
-#else
-PyInit_perl()
-#endif
+PyMODINIT_FUNC
+PyInit_perl(void)
 {
     void* handle = NULL;
     const char *err = NULL;
@@ -29,11 +25,7 @@ PyInit_perl()
     if (path == NULL || !PyList_Check(path)) {
 	PyErr_SetString(PyExc_ImportError,
 			"sys.path must be a list of directory names");
-	return
-#if PY_MAJOR_VERSION >= 3
-	NULL
-#endif
-	;
+	return NULL;
     }
 
     npath = PyList_Size(path);
@@ -65,7 +57,7 @@ PyInit_perl()
     }
 
     if (handle) {
-	PyMODINIT_FUNC (*f)() = dlsym(handle, "PyInit_perl2");
+	PyObject *(*f)(void) = (PyObject *(*)(void))dlsym(handle, "PyInit_perl2");
 
 	if (f)
 	    return f();
@@ -76,7 +68,5 @@ PyInit_perl()
 	PyErr_SetString(PyExc_ImportError,
 			err ? err : "perl2" EXT_SUFFIX " not found in sys.path");
 
-#if PY_MAJOR_VERSION >= 3
     return NULL;
-#endif
 }
