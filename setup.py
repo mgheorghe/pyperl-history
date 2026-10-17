@@ -197,9 +197,9 @@ class boot_from_perl_install(install):
         install.run(self)
 
 setup (name        = "pyperl",
-        version     = "1.0.3",
+        version     = "1.0.4",
         description = "Embed a Perl interpreter",
-        url         = "http://www.ActiveState.com",
+        url         = "https://github.com/mgheorghe/pyperl",
         author      = "ActiveState",
         author_email= "gisle@ActiveState.com",
         py_modules  = ['dbi', 'dbi2', 'perlpickle', 'perlmod'],
