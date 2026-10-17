@@ -19,6 +19,10 @@
 #include "lang_map.h"
 #include "try_perlapi.h"
 
+#if PERL_VERSION < 24
+#error "pyperl needs perl 5.24 or newer"
+#endif
+
 #ifndef WIN32
 #include <dlfcn.h>
 #endif
